@@ -1,0 +1,99 @@
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix
+    networks:
+      - lab
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:alpine-5.0-latest
+    environment:
+      DB_SERVER_HOST: postgres
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix
+    ports:
+      - "10051:10051"
+    depends_on:
+      - postgres
+    networks:
+      - lab
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-5.0-latest
+    environment:
+      DB_SERVER_HOST: postgres
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix
+      ZBX_SERVER_HOST: zabbix-server
+    ports:
+      - "8080:8080"
+    depends_on:
+      - zabbix-server
+    networks:
+      - lab
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - lab
+
+  alertmanager:
+    image: prom/alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - lab
+
+  node-exporter:
+    image: prom/node-exporter
+    ports:
+      - "9100:9100"
+    networks:
+      - lab
+
+  zal:
+    build: ./zal
+    command:
+      - zal
+      - send
+      - --zabbix-addr=zabbix-server:10051
+      - --default-host=prometheus-lab
+      - --hosts-path=/etc/zal/hosts.yml
+      - --addr=0.0.0.0:9095
+      - --key-prefix=prometheus
+      - --log.level=debug
+    ports:
+      - "9095:9095"
+    volumes:
+      - ./zal/hosts.yml:/etc/zal/hosts.yml:ro
+    depends_on:
+      - zabbix-server
+    networks:
+      - lab
+
+  webhook:
+    build: ./webhook
+    ports:
+      - "5001:5001"
+    networks:
+      - lab
+
+networks:
+  lab:

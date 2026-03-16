@@ -1,0 +1,30 @@
+groups:
+  - name: lab-alerts
+    rules:
+
+      - alert: DeadMansSwitch
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Watchdog ativo"
+
+      - alert: HighCPU
+        expr: 100 - (avg by(instance, zabbix_host)(rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 50
+        for: 1m
+        labels:
+          severity: warning
+          zabbix_host: "{{ $labels.zabbix_host }}"
+        annotations:
+          summary: "CPU acima de 50% em {{ $labels.instance }}"
+          host: "{{ $labels.zabbix_host }}"
+
+      - alert: LowMemory
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 20
+        for: 1m
+        labels:
+          severity: critical
+          zabbix_host: "{{ $labels.zabbix_host }}"
+        annotations:
+          summary: "Memoria disponivel baixa em {{ $labels.instance }}"
+          host: "{{ $labels.zabbix_host }}"

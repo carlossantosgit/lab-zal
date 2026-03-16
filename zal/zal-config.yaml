@@ -1,0 +1,7 @@
+zabbixHosts:
+  - name: prometheus-lab
+    itemDefaultApplication: "Prometheus Alerts"
+    itemDefaultHistory: "7d"
+    itemDefaultTrends: "30d"
+    itemDefaultTrapperHosts: ""
+    alertsDir: /etc/zal/alerts
