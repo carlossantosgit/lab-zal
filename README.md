@@ -209,6 +209,7 @@ lab-zal/
 └── scripts/                         ← Ferramentas
     ├── populate_demo_data.py        ← Popular 4 hosts com dados demo
     ├── sync_prometheus_rules.py     ← ⭐ CLI para sincronizar regras
+    ├── validate_e2e.py              ← ✅ Validação end-to-end completa
     ├── setup_hosts.py               ← Criar hosts manualmente (opcional)
     ├── fix_all_items.py             ← Corrigir interfaces (opcional)
     └── README.md                    ← Guia de scripts
@@ -251,7 +252,26 @@ python3 scripts/sync_prometheus_rules.py --host prod-db-01 --demo
 # ✅ Triggers criadas:  32
 ```
 
-### Teste 3: Via Logs (Ver Sincronização em Tempo Real)
+### Teste 3: Validação End-to-End Completa ✅
+
+```bash
+# Script que demonstra pipeline completa de ponta a ponta
+python3 scripts/validate_e2e.py
+
+# Output: Validação com 6 etapas:
+# ETAPA 1: Conectividade com Sistemas (OK)
+# ETAPA 2: Ver 32 Regras Prometheus (OK)
+# ETAPA 3: Criar Nova Regra Customizada (OK)
+# ETAPA 4: Sincronizar com Zabbix (33 items + 33 triggers ✅)
+# ETAPA 5: Validar no Zabbix API (OK)
+# ETAPA 6: Resultado Final (Pronto para Produção!)
+```
+
+**Documentação:**
+- 📄 [E2E_VALIDATION_REPORT.md](./E2E_VALIDATION_REPORT.md) - Relatório completo com diagramas
+- 📄 [VALIDACAO_SYNC.md](./VALIDACAO_SYNC.md) - 4 métodos de validação
+
+### Teste 4: Via Logs (Ver Sincronização em Tempo Real)
 
 ```bash
 docker-compose logs webhook -f
@@ -415,4 +435,12 @@ docker-compose logs alertmanager
 
 **Desenvolvido com ❤️ para Observabilidade Automática**
 
-Documentação: [POC_PROMETHEUS_SYNC.md](./POC_PROMETHEUS_SYNC.md) | Guia: [APRESENTACAO.md](./APRESENTACAO.md) | Quick Start: [QUICKSTART.md](./QUICKSTART.md)
+📚 **Documentação Principal:**
+- [QUICKSTART.md](./QUICKSTART.md) - Começo rápido (5-10 min)
+- [APRESENTACAO.md](./APRESENTACAO.md) - Slides para apresentação (10 min)
+- [POC_PROMETHEUS_SYNC.md](./POC_PROMETHEUS_SYNC.md) - Detalhes técnicos do POC
+
+✅ **Validação & Testes:**
+- [E2E_VALIDATION_REPORT.md](./E2E_VALIDATION_REPORT.md) - Relatório end-to-end com execução real
+- [VALIDACAO_SYNC.md](./VALIDACAO_SYNC.md) - 4 métodos de validação + troubleshooting
+- `python3 scripts/validate_e2e.py` - Executar validação interativa

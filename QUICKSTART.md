@@ -66,7 +66,27 @@ python3 scripts/sync_prometheus_rules.py --list
 ✅ Triggers criadas:  32 (por host)
 ```
 
-### Passo 3: Abrir Zabbix
+### Passo 3: Validação End-to-End (Opcional - 2 min) ✅
+
+Se quiser **ver todo o fluxo automatizado de ponta a ponta**, execute:
+
+```bash
+# Inicia Zabbix, cria nova regra, sincroniza, valida tudo
+python3 scripts/validate_e2e.py
+```
+
+**O script vai:**
+1. ✅ Conectar aos sistemas (Zabbix, Prometheus, Webhook)
+2. ✅ Mostrar 32 regras Prometheus atuais
+3. ✅ Criar uma regra customizada nova
+4. ✅ Criar host de teste
+5. ✅ Sincronizar 33 regras (a antiga + a nova!)
+6. ✅ Validar no Zabbix API
+7. ✅ Mostrar resultado: **33 items + 33 triggers criadas** ✨
+
+**Resultado:** Prova visual que pipeline completa funciona end-to-end!
+
+### Passo 4: Abrir Zabbix
 
 ```
 http://localhost:8080
