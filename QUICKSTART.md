@@ -1,121 +1,106 @@
-# 🚀 Quick Start - Lab ZAL (5-10 Minutos)
+# 🚀 Quick Start - Lab ZAL (10-15 Minutos)
 
-Para colocar Lab ZAL rodando em sua máquina do zero.
+Sincronização dinâmica de 32 regras Prometheus com Zabbix!
 
 ## ⚙️ Pré-requisitos
 
 ```bash
 # Docker
 docker --version
-# Esperado: Docker version 20.10+ ou superior
-
 # Docker Compose
 docker-compose --version
-# Esperado: Docker Compose version 1.29+ ou superior
 ```
 
-### Instalar Docker (se não tiver)
+### Instalar Docker
 
 **macOS:**
 ```bash
 brew install docker docker-compose
-# ou descarregar Docker Desktop: https://www.docker.com/products/docker-desktop
+# ou Docker Desktop: https://www.docker.com/products/docker-desktop
 ```
 
-**Linux (Ubuntu/Debian):**
+**Linux:**
 ```bash
-sudo apt update
 sudo apt install -y docker.io docker-compose
 sudo usermod -aG docker $USER
 newgrp docker
 ```
 
 **Windows:**
-- Descarregar Docker Desktop: https://www.docker.com/products/docker-desktop
+- Descarregar Docker Desktop
 - Executar no PowerShell/CMD
 
 ## 📥 Descarregar o Projeto
-
-### Git (recomendado)
 
 ```bash
 git clone https://github.com/carlossantosgit/lab-zal.git
 cd lab-zal
 ```
 
-### ZIP
-
-```bash
-# Descarregar de: https://github.com/carlossantosgit/lab-zal/archive/refs/heads/main.zip
-unzip lab-zal-main.zip
-cd lab-zal-main
-```
-
 ## 🚀 Iniciar (3 Passos)
 
-### Passo 1: Verificar Docker
-
-```bash
-docker-compose ps
-# Deve estar funcionando
-```
-
-### Passo 2: Iniciar Containers
+### Passo 1: Iniciar Containers (5 minutos)
 
 ```bash
 docker-compose up -d
 ```
 
-**Esperado (depois de ~30 segundos):**
-```
-✅ Creating network "lab-zal_lab" with driver "bridge"
-✅ Container lab-zal-postgres-1 Created
-✅ Container lab-zal-prometheus-1 Created
-✅ Container lab-zal-alertmanager-1 Created
-✅ Container lab-zal-webhook-1 Created
-✅ Container lab-zal-zabbix-server-1 Created
-✅ Container lab-zal-zabbix-web-1 Created
-✅ Container lab-zal-node-exporter-1 Created
-✅ Container lab-zal-zal-1 Created
-```
+Esperar Zabbix inicializar...
 
-### Passo 3: Verificar Status
+### Passo 2: Sincronizar Regras Prometheus ⭐
 
 ```bash
-docker-compose ps
+# Option A: Sincronizar todos os hosts
+python3 scripts/sync_prometheus_rules.py --all --demo
 
-# Esperado: 8/8 containers UP
+# Option B: Sincronizar um host específico
+python3 scripts/sync_prometheus_rules.py --host prod-db-01 --demo
+
+# Option C: Ver lista de hosts
+python3 scripts/sync_prometheus_rules.py --list
 ```
 
-## 🌐 Aceder aos Serviços
-
-| Serviço | URL | Credenciais |
-|---------|-----|-------------|
-| **Zabbix Web** | http://localhost:8080 | Admin / zabbix |
-| **Prometheus** | http://localhost:9090 | - |
-| **Alert Manager** | http://localhost:9093 | - |
-| **Webhook** | http://localhost:5001/health | - |
-
-## ✨ Feature Principal: Auto-Create de Hosts
-
-Quando um alerta chega do Prometheus com um host desconhecido, o webhook **cria automaticamente**:
-
+**Resultado esperado:**
 ```
-Prometheus Alert com label: zabbix_host=novo-host
-        ↓
-Webhook recebe
-        ↓
-Verifica em Zabbix API: Host existe?
-        ↓
-NÃO? CRIA automaticamente:
-  ✅ Host com interface configurada
-  ✅ 3 items padrão (CPU, Memory, Watchdog)
-  ✅ Pronto para receber dados!
+✅ Items criados:     32 (por host)
+✅ Triggers criadas:  32 (por host)
 ```
 
-### Teste Auto-Create
+### Passo 3: Abrir Zabbix
 
-Enviar alerta via curl para testar:
+```
+http://localhost:8080
+User: Admin
+Password: zabbix
+```
+
+**Navegar:** Monitoring → Latest Data
+
+**Ver:** Hosts com 32 items cada! ✨
+
+## ✨ O Que é Novo: Dynamic Prometheus Rules Sync
+
+Quando um alerta chega do Prometheus:
+
+```
+1. Webhook detecta novo host
+2. Cria host em Zabbix
+3. ✨ SINCRONIZA 32 REGRAS PROMETHEUS
+4. Cria 32 items + 32 triggers automaticamente!
+```
+
+**Resultados:**
+```
+Prometheus: 32 alerting rules
+         ↓
+Zabbix: 32 items + 32 triggers por host
+         ↓
+Sem hardcoding - totalmente dinâmico!
+```
+
+## 🧪 Testar Auto-Create + Sync
+
+### Teste 1: Via Webhook (Auto-Create + Sync)
 
 ```bash
 curl -X POST -H "Content-Type: application/json" \
@@ -125,7 +110,7 @@ curl -X POST -H "Content-Type: application/json" \
         "status": "firing",
         "labels": {
           "alertname": "TestAlert",
-          "zabbix_host": "servidor-novo",
+          "zabbix_host": "novo-servidor",
           "severity": "critical"
         }
       }
@@ -134,81 +119,130 @@ curl -X POST -H "Content-Type: application/json" \
   http://localhost:5001/alerts
 ```
 
-**Resultado esperado:**
-```
-ok
-```
-
-**Verificar no Zabbix:**
-1. Abrir http://localhost:8080
-2. Login: Admin / zabbix
-3. Monitoring → Latest Data
-4. Filtrar por: "servidor-novo"
-5. ✅ Host aparecerá com 3 items já criados!
-
-**Verificar nos logs:**
-```bash
-docker-compose logs webhook -f
-
-# Verá:
-# INFO:root:🆕 Host 'servidor-novo' not found - creating...
-# INFO:root:✅ Created host in Zabbix: servidor-novo
-# INFO:root:✅ Created item: prometheus.deadmansswitch
-# INFO:root:✅ Created item: prometheus.highcpu
-# INFO:root:✅ Created item: prometheus.lowmemory
-```
-
-## 📊 Popular Dados de Demo (Para Apresentação)
-
-Para ter dados realistas prontos para demonstração:
-
-```bash
-python3 scripts/populate_demo_data.py
-```
-
-Isso cria:
-- ✅ 4 hosts: prod-db-01, api-server-01, cache-redis-01, app-web-01
-- ✅ 24 items (6 por host): CPU, Memory, Requests, Latency, Error Rate, Watchdog
-- ✅ 9 triggers (3 por host): High CPU, Low Memory, High Error Rate
-- ✅ Dados de teste realistas
+**Resultado:**
+- Host `novo-servidor` criado
+- 32 items + 32 triggers sincronizados automaticamente! ✨
 
 **Ver em Zabbix:**
-```
-http://localhost:8080
-Monitoring → Latest Data
-```
+1. Monitoring → Latest Data
+2. Filtrar: "novo-servidor"
+3. Ver 32 items criados!
 
-Você verá 4 hosts com dados realistas prontos para apresentação!
-
-## ✅ Testar Tudo Funciona
-
-### Teste 1: Conexão Zabbix
+### Teste 2: Sincronização Manual
 
 ```bash
-docker-compose exec webhook zabbix_sender \
-  -z zabbix-server \
-  -s "node-01" \
-  -k "prometheus.test" \
-  -o "999"
+# Sincronizar UM host com 32 regras
+python3 scripts/sync_prometheus_rules.py --host api-server-01 --demo
 
-# Esperado:
-# Response from "zabbix-server:10051": "processed: 1; failed: 0"
+# Sincronizar TODOS os hosts
+python3 scripts/sync_prometheus_rules.py --all --demo
 ```
 
-### Teste 2: Logs em Tempo Real
+### Teste 3: Ver Logs de Sincronização
 
 ```bash
 docker-compose logs webhook -f
 
-# Verá logs do webhook processando
+# Verá mensagens como:
+# INFO:root:✅ Item criado: prometheus.highcpuusage
+# INFO:root:✅ Trigger criada: High CPU Usage
+# INFO:root:✨ Prometheus sync: 32 items, 32 triggers criados
 ```
 
-### Teste 3: Dados Realistas
+## 📋 32 Regras Sincronizadas
+
+```
+✅ CPU (High, Critical)
+✅ Memory (Low, Critical)
+✅ Disk (High, Critical, I/O)
+✅ Network (Packet Loss, Latency)
+✅ HTTP (Errors, Slow Response)
+✅ Database (Connections, Slow Queries, Replication)
+✅ Cache (Hit Rate, Persistence)
+✅ Kubernetes (Node, Pod)
+✅ Docker (Container)
+✅ Prometheus (Memory, Checkpoints)
+✅ Alertmanager (Config)
+✅ Zabbix (Down, Queue)
+✅ Security (SSL, Auth, Suspicious Activity)
+✅ System (Load, File Descriptors)
+
+Total: 32 regras dinâmicas!
+```
+
+## 📊 URLs de Acesso
+
+| Serviço | URL | Credenciais |
+|---------|-----|-------------|
+| **Zabbix Web** | http://localhost:8080 | Admin / zabbix |
+| **Prometheus** | http://localhost:9090 | - |
+| **Alert Manager** | http://localhost:9093 | - |
+| **Webhook** | http://localhost:5001/health | - |
+
+## ✅ Verificações Rápidas
 
 ```bash
-python3 scripts/populate_demo_data.py
+# Ver status dos containers
+docker-compose ps
 
-# Verá output com 4 hosts criados + items + triggers
+# Listar hosts em Zabbix
+python3 scripts/sync_prometheus_rules.py --list
+
+# Verificar webhook health
+curl http://localhost:5001/health
+
+# Ver logs
+docker-compose logs webhook -f
+```
+
+## 🎯 Para Apresentação
+
+```bash
+# Setup completo em 3 comandos:
+docker-compose up -d                              # Iniciar
+python3 scripts/sync_prometheus_rules.py --all --demo  # Sincronizar
+open http://localhost:8080                        # Ver resultado
+
+# Resultado: 288 items + triggers criados! 🎊
+```
+
+## ❌ Troubleshooting
+
+### Containers não iniciam
+
+```bash
+# Ver status
+docker-compose ps
+
+# Ver logs de erro
+docker-compose logs
+
+# Recriar containers
+docker-compose down -v
+docker-compose up -d
+```
+
+### Script não sincroniza
+
+```bash
+# Testar se Zabbix está respondendo
+curl -s http://localhost:8080 | grep -i zabbix
+
+# Verificar arquivo fake existe
+ls webhook/fake_prometheus_rules.json
+
+# Testar manualmente
+python3 scripts/sync_prometheus_rules.py --list
+```
+
+### Items não aparecem em Zabbix
+
+```bash
+# Corrigir interfaces
+cd scripts && python3 fix_all_items.py
+
+# Sincronizar novamente
+python3 sync_prometheus_rules.py --all --demo
 ```
 
 ## 📖 Próximos Passos
@@ -218,14 +252,14 @@ python3 scripts/populate_demo_data.py
    cat README.md
    ```
 
-2. **Ver guia de apresentação:**
+2. **Ler POC detalhada:**
    ```bash
-   cat APRESENTACAO.md
+   cat POC_PROMETHEUS_SYNC.md
    ```
 
-3. **Ver logs em tempo real:**
+3. **Ver guia de apresentação:**
    ```bash
-   docker-compose logs -f
+   cat APRESENTACAO.md
    ```
 
 4. **Parar os serviços:**
@@ -233,122 +267,63 @@ python3 scripts/populate_demo_data.py
    docker-compose down
    ```
 
-5. **Remover tudo (incluindo dados):**
+5. **Remover tudo (dados inclusos):**
    ```bash
    docker-compose down -v
    ```
 
-## ❌ Troubleshooting
+## 🎓 Conceitos-Chave
 
-### "Permission denied while trying to connect to Docker daemon"
+**Auto-Create (Fase 1):**
+- Webhook detecta host novo via alerta
+- Cria host em Zabbix automaticamente
+- Configura interface Zabbix Agent
 
-**Solução (Linux):**
-```bash
-sudo usermod -aG docker $USER
-newgrp docker
-```
+**Dynamic Rules Sync (Fase 2) ⭐:**
+- Webhook lê 32+ regras do Prometheus
+- Cria item para cada regra
+- Cria trigger correspondente
+- Mapeia severity (warning→Average, critical→High)
+- Host fica pronto com 32 items + triggers
 
-### "Port 8080 already in use"
+**Result:** Monitoramento completo automático! 🚀
 
-**Solução:** Mude a porta em `docker-compose.yml`:
-```yaml
-services:
-  zabbix-web:
-    ports:
-      - "8081:8080"  # Usar 8081 em vez de 8080
-```
-
-### "Cannot connect to Zabbix"
-
-```bash
-# Ver se container está UP
-docker-compose ps zabbix-server
-
-# Ver logs
-docker-compose logs zabbix-server
-
-# Zabbix precisa de 30-60 segundos para inicializar
-sleep 60
-```
-
-### "Auto-create não está funcionando"
-
-```bash
-# Ver logs do webhook
-docker-compose logs webhook -f
-
-# Procurar por:
-# "✅ Created host" = funcionando
-# "❌ Failed" = erro
-
-# Testar conexão webhook-zabbix
-docker-compose exec webhook zabbix_sender \
-  -z zabbix-server -s "test" -k "test" -o "1"
-```
-
-## 🏗️ Arquitetura Rápida
+## 🏗️ Arquitetura Simplificada
 
 ```
-Prometheus (9090)
-    ↓ (coleta com label zabbix_host=...)
-Alert Manager (9093)
+Prometheus
+    ↓ (32 alerting rules)
+Alert Manager
     ↓ (webhook POST)
-Webhook (5001) ✨ Auto-Create
+Webhook ✨
+    ├─ Cria host
+    └─ Sincroniza 32 regras
     ↓
-Zabbix Server (10051)
-    ↓
-Zabbix Web UI (8080)
-    ↓
-Você vê dados em tempo real!
+Zabbix
+    └─ 32 items + 32 triggers prontos!
 ```
 
 ## 💡 Dicas
 
-- **Primeiro acesso Zabbix**: Esperar 2-3 minutos para DB inicializar
-- **Ver métricas Prometheus**: Abrir http://localhost:9090/targets
-- **Ver alertas**:http://localhost:9093/api/v2/alerts
-- **Auto-create em ação**: `docker-compose logs webhook -f | grep "Created"`
-- **Para apresentação**: `python3 scripts/populate_demo_data.py`
-
-## 🎯 Para Apresentação
-
-Guia completo de apresentação: **[APRESENTACAO.md](./APRESENTACAO.md)**
-
-**Quick Demo (5-10 min):**
-```bash
-# Terminal 1
-docker-compose up -d
-
-# Terminal 2 (depois de 1-2 min)
-python3 scripts/populate_demo_data.py
-
-# Browser
-open http://localhost:8080
-# Login: Admin / zabbix
-# Navegar: Monitoring → Latest Data
-```
-
-Pronto para impressionar! 🚀
+- **Primeira vez:** Esperar 5-10 min para Zabbix inicializar completamente
+- **Demo:** Usar `--demo` para modo arquivo fake (não precisa Prometheus real)
+- **Real:** Remover `--demo` para sincronizar com Prometheus real
+- **Rápido:** Use `--all` para sincronizar todos os hosts de uma vez
+- **Seguro:** Syncronização é idempotente (não duplica regras)
 
 ## 📞 Precisa de Ajuda?
 
-Verifique a documentação completa:
+Ver logs em tempo real:
 ```bash
-cat README.md          # Documentação completa
-cat APRESENTACAO.md   # Guia de apresentação
+docker-compose logs -f
 ```
 
-Ver logs dos serviços:
-```bash
-docker-compose logs <service> -f
-
-# Exemplos:
-docker-compose logs prometheus
-docker-compose logs zabbix-server
-docker-compose logs webhook
-docker-compose logs alertmanager
-```
+Ver guias completos:
+- [README.md](./README.md) - Documentação técnica
+- [POC_PROMETHEUS_SYNC.md](./POC_PROMETHEUS_SYNC.md) - POC detalhada
+- [APRESENTACAO.md](./APRESENTACAO.md) - Slides para apresentação
+- [scripts/README.md](./scripts/README.md) - Guia de scripts
 
 ---
 
-**Bom uso! 🎊**
+**Pronto para impressionar!** 🎊

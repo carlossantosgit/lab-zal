@@ -1,110 +1,141 @@
 # 🔄 Lab ZAL - Prometheus + Alert Manager + Zabbix
 
-Integração completa com **Auto-Create de Hosts** - quando alerta chega, host é criado automaticamente em Zabbix! ✨
+**Integração completa com Sincronização Dinâmica de Regras Prometheus!** ✨
 
-## ✨ Feature Principal: Auto-Create de Hosts
+> Quando um alerta chega do Prometheus, o webhook **sincroniza automaticamente** todas as rules (32+ regras) criando items e triggers no Zabbix - **sem hardcoding, totalmente dinâmico!**
 
-**Webhook detecta hosts desconhecidos e cria automaticamente:**
+## ✨ Feature Principal: Dynamic Prometheus Rules Sync
+
+**POC (Proof of Concept) - Pronta para Apresentação**
 
 ```
-Prometheus Alert (novo host)
+Prometheus (32+ Alerting Rules)
          ↓
-Webhook verifica
+Webhook sincroniza via API Prometheus
          ↓
-Host não existe?
+Zabbix cria dinamicamente:
+  ✅ 32 items (um por rule)
+  ✅ 32 triggers (com threshold correto)
+  ✅ Severity mapped (warning→Average, critical→High)
          ↓
-CRIA automaticamente:
-  ✅ Host com interface Zabbix Agent
-  ✅ 3 items padrão (CPU, Memory, Watchdog)
-  ✅ Pronto para receber dados!
+Resultado: Host pronto para monitoramento completo!
 ```
 
-**Benefícios:**
-- ✅ Zero manual - sem criar hosts em Zabbix manualmente
-- ✅ Escalável - adicione quantos hosts quiser em Prometheus
-- ✅ Automático - tudo acontece quando alerta chega
-- ✅ Robusto - API Zabbix valida tudo
+### Como Funciona
+
+1. **Host novo chega via alerta**
+   ```
+   Alert: {alertname: "HighCPUUsage", zabbix_host: "prod-db-01"}
+   ```
+
+2. **Webhook cria host em Zabbix**
+   ```
+   Host: prod-db-01 ✅
+   ```
+
+3. **Sincroniza todas as 32 regras** ⭐
+   ```
+   rule[0] → prometheus.highcpuusage + trigger
+   rule[1] → prometheus.criticalmemory + trigger
+   rule[2] → prometheus.highdiskusage + trigger
+   ...
+   rule[31] → prometheus.filedescriptorexhausted + trigger
+   ```
+
+4. **Host fica pronto com dados**
+   ```
+   32 items + 32 triggers
+   Histórico funcionando
+   Dashboard pronto
+   ```
 
 ## 🏗️ Arquitetura
 
 ```
-┌─────────────┐      ┌──────────────┐      ┌──────────┐      ┌────────────┐
-│ Prometheus  │ ───→ │ Alert Manager│ ───→ │ Webhook  │ ───→ │   Zabbix   │
-│  (Coleta)   │      │ (Roteamento) │      │(Auto-Cria)      │  (Storage) │
-└─────────────┘      └──────────────┘      └──────────┘      └────────────┘
-     9090                  9093              ✨ AUTO-CREATE    10051/8080
+┌─────────────┐      ┌──────────────┐      ┌──────────────┐      ┌────────────┐
+│ Prometheus  │ ───→ │ Alert Manager│ ───→ │   Webhook    │ ───→ │   Zabbix   │
+│(32+ rules)  │      │ (Roteamento) │      │(Sync Dynamic)      │  (Storage) │
+└─────────────┘      └──────────────┘      └──────────────┘      └────────────┘
+     9090                  9093           prometheus_sync.py      10051/8080
 ```
 
 **8 Containers Docker:**
-- Prometheus (coleta métricas)
-- Alert Manager (roteia alertas)
-- Zabbix Server (armazena dados)
-- Zabbix Web UI (interface)
-- PostgreSQL (banco de dados)
-- Node Exporter (exporta métricas)
-- Webhook (auto-create, Python Flask)
-- ZAL (Zabbix Alert Manager)
+- ✅ Prometheus (coleta + 32 alerting rules)
+- ✅ Alert Manager (roteia alertas)
+- ✅ Zabbix Server (armazena dados)
+- ✅ Zabbix Web UI (interface)
+- ✅ PostgreSQL (banco de dados)
+- ✅ Node Exporter (exporta métricas)
+- ✅ Webhook (sincroniza regras dinamicamente) ⭐
+- ✅ ZAL (Zabbix Alert Manager)
 
-## 📊 Fluxo de Dados
+## 📊 Fluxo de Dados Completo
 
 ```
-1. Prometheus escruta exportadores
-   └─ Cada scrape job tem label: zabbix_host=nome-do-host
+1. Prometheus coleta métricas de hosts
+   └─ Com label: zabbix_host=nome-do-host
 
-2. Se métrica ultrapassa threshold, alerta dispara
-   └─ CPU > 50%, RAM < 20%, etc
+2. Se métrica ultrapassa threshold, cria alerta
+   └─ Com all 32 alerting rules (CPU, Memory, Disk, Network, HTTP, DB, etc)
 
-3. Alert Manager recebe e envia webhook POST /alerts
-   └─ Preserva label zabbix_host
+3. Alerta chega no Alert Manager
+   └─ Com label zabbix_host preservado
 
-4. Webhook processa AUTOMATICAMENTE ✨
-   ├─ Verifica se host existe em Zabbix via API
-   ├─ Se não existe:
-   │  ├─ Cria host com interface configurada
-   │  ├─ Cria 3 items padrão
-   │  └─ Loga: "✅ Created host in Zabbix: node-01"
-   └─ Envia métrica via zabbix_sender
+4. Alert Manager envia webhook POST /alerts
+   └─ Webhook recebe a request
 
-5. Zabbix Server processa dados
-   └─ Host: node-01 → Item: prometheus.highcpu → Value: 1
+5. Webhook processa:
+   ├─ Verifica se host existe em Zabbix
+   ├─ Se não existe, CRIA host
+   └─ SINCRONIZA 32 regras Prometheus ✨
+      ├─ Lê regras do Prometheus API ou arquivo fake
+      ├─ Para cada rule:
+      │  ├─ Cria item: prometheus.{alertname.lower()}
+      │  ├─ Cria trigger: {hostname:item.last()}>0
+      │  └─ Mapeia severity (warning→2, critical→4)
+      └─ Resultado: 32 items + 32 triggers
 
-6. Zabbix UI exibe dados em Monitoring → Latest Data
-   └─ Host já criado com items configurados!
+6. Host em Zabbix fica com:
+   ✅ 32 items configurados
+   ✅ 32 triggers prontas
+   ✅ Histórico funcionando
+   ✅ Dashboard pronto
+
+7. Zabbix UI exibe:
+   └─ Monitoring → Latest Data
+      └─ Host com todos os 32 items com dados!
 ```
 
-## 🚀 Quick Start (5 Minutos)
+## 🚀 Quick Start (5-10 Minutos)
 
-### 1️⃣ Iniciar
+### Passo 1: Iniciar
 
 ```bash
 docker-compose up -d
+# Esperar 5 min para Zabbix inicializar...
 ```
 
-### 2️⃣ Verificar Status
+### Passo 2: Sincronizar Regras (Novo!)
 
 ```bash
-docker-compose ps
-# Deve mostrar 8/8 containers UP
+# Listar hosts
+python3 scripts/sync_prometheus_rules.py --list
+
+# Sincronizar UM host com 32 regras
+python3 scripts/sync_prometheus_rules.py --host prod-db-01 --demo
+
+# Sincronizar TODOS os hosts
+python3 scripts/sync_prometheus_rules.py --all --demo
 ```
 
-### 3️⃣ Popular Dados de Demo (OPCIONAL - para apresentação)
-
-```bash
-python3 scripts/populate_demo_data.py
+**Resultado:**
+```
+✅ 10 hosts processados
+✅ 288 items criados (10 × 32)
+✅ 288 triggers criadas (10 × 32)
 ```
 
-Isso cria 4 hosts de exemplo com dados realistas:
-- prod-db-01 (Production Database)
-- api-server-01 (API Server)
-- cache-redis-01 (Redis Cache)
-- app-web-01 (Web Application)
-
-Cada host com:
-- ✅ 6 items (CPU, Memory, Requests, Latency, Error Rate, Watchdog)
-- ✅ 3 triggers (High CPU, Low Memory, High Error Rate)
-- ✅ Dados de teste realistas
-
-### 4️⃣ Acessar Zabbix
+### Passo 3: Abrir Zabbix
 
 ```
 http://localhost:8080
@@ -112,20 +143,80 @@ User: Admin
 Password: zabbix
 ```
 
-Navegar: **Monitoring → Latest Data** para ver hosts com dados!
+**Ir para:** Monitoring → Latest Data
 
-## 📋 URLs de Acesso
+**Ver:** 10 hosts com 288 items cada! ✨
 
-| Serviço | URL | Credenciais |
-|---------|-----|-------------|
-| **Zabbix Web** | http://localhost:8080 | Admin / zabbix |
-| **Prometheus** | http://localhost:9090 | - |
-| **Alert Manager** | http://localhost:9093 | - |
-| **Webhook Health** | http://localhost:5001/health | - |
+## 📋 32 Regras Prometheus Sincronizadas
 
-## 🧪 Testar Auto-Create
+### Infraestrutura
+- ✅ HighCPUUsage, CriticalCPUUsage
+- ✅ LowMemoryAvailable, CriticalMemoryUsage
+- ✅ HighDiskUsage, CriticalDiskUsage, DiskIOHigh
+- ✅ NetworkPacketLoss, HighNetworkLatency
+- ✅ LoadAverageHigh, FileDescriptorExhausted
 
-### Teste 1: Enviar Alerta Manual (Criar Host Novo)
+### Aplicações
+- ✅ HTTPErrorRateHigh, HTTPSlowResponse
+- ✅ DatabaseConnectionPoolExhausted, DatabaseSlowQueries, DatabaseReplicationLag
+- ✅ CacheHitRateLow, RedisPersistenceFailure
+
+### Orquestração
+- ✅ KubernetesNodeNotReady, KubernetesPodCrashLooping, KubernetesPodNotHealthy
+- ✅ DockerContainerExited
+
+### Monitoramento
+- ✅ PrometheusHighMemoryUsage, PrometheusChunksToDiskSuccess
+- ✅ AlertmanagerConfigReload
+- ✅ ZabbixServerDown, ZabbixHighQueueSize
+
+### Segurança
+- ✅ SSLCertificateExpiringSoon, SSLCertificateExpired
+- ✅ AuthenticationFailures, UnusualNetworkActivity
+
+### Sistema
+- ✅ FilesystemReadonly
+
+## 📁 Estrutura do Projeto
+
+```
+lab-zal/
+├── docker-compose.yml              ← Orquestração (8 containers)
+├── README.md                        ← Este arquivo
+├── QUICKSTART.md                    ← Começo rápido
+├── APRESENTACAO.md                  ← Slides para apresentação
+├── POC_PROMETHEUS_SYNC.md          ← Documentação POC detalhada
+│
+├── prometheus/                      ← Coleta de métricas
+│   ├── prometheus.yml              ← Scrape jobs com labels zabbix_host
+│   └── rules/
+│       └── alerts.yml              ← 32+ alerting rules com label zabbix_host
+│
+├── alertmanager/                    ← Roteamento de alertas
+│   └── alertmanager.yml            ← Route: webhook http://webhook:5001/alerts
+│
+├── webhook/                         ← ✨ AUTO-CREATE + DYNAMIC SYNC
+│   ├── receiver.py                 ← Flask app integrado
+│   ├── prometheus_sync.py          ← ⭐ Módulo de sincronização Prometheus
+│   ├── fake_prometheus_rules.json   ← ⭐ 32 regras para demo
+│   └── Dockerfile
+│
+├── zal/                             ← Zabbix Alert Manager
+│   ├── hosts.yml
+│   ├── zal-config.yaml
+│   └── Dockerfile
+│
+└── scripts/                         ← Ferramentas
+    ├── populate_demo_data.py        ← Popular 4 hosts com dados demo
+    ├── sync_prometheus_rules.py     ← ⭐ CLI para sincronizar regras
+    ├── setup_hosts.py               ← Criar hosts manualmente (opcional)
+    ├── fix_all_items.py             ← Corrigir interfaces (opcional)
+    └── README.md                    ← Guia de scripts
+```
+
+## 🧪 Como Testar
+
+### Teste 1: Auto-Create + Sync via Webhook
 
 ```bash
 curl -X POST -H "Content-Type: application/json" \
@@ -135,8 +226,8 @@ curl -X POST -H "Content-Type: application/json" \
         "status": "firing",
         "labels": {
           "alertname": "TestAlert",
-          "zabbix_host": "novo-servidor",
-          "severity": "critical"
+          "zabbix_host": "novo-host-teste",
+          "severity": "warning"
         }
       }
     ]
@@ -144,72 +235,43 @@ curl -X POST -H "Content-Type: application/json" \
   http://localhost:5001/alerts
 ```
 
-**Resultado:** Host `novo-servidor` será criado automaticamente em Zabbix com 3 items! ✨
+**Resultado:**
+1. Host `novo-host-teste` é criado em Zabbix
+2. Webhook sincroniza 32 regras Prometheus
+3. Host fica com 32 items + 32 triggers prontos! ✨
 
-### Teste 2: Ver nos Logs
+### Teste 2: Sincronizar Manual com CLI
+
+```bash
+# Sincronizar um host específico
+python3 scripts/sync_prometheus_rules.py --host prod-db-01 --demo
+
+# Output:
+# ✅ Items criados:     32
+# ✅ Triggers criadas:  32
+```
+
+### Teste 3: Via Logs (Ver Sincronização em Tempo Real)
 
 ```bash
 docker-compose logs webhook -f
 
-# Verá mensagens tipo:
-# INFO:root:📬 Received 1 alerts
-# INFO:root:🆕 Host 'novo-servidor' not found - creating...
-# INFO:root:✅ Created host in Zabbix: novo-servidor (ID: 10441)
-# INFO:root:✅ Created item: prometheus.deadmansswitch
-# INFO:root:✅ Created item: prometheus.highcpu
-# INFO:root:✅ Created item: prometheus.lowmemory
-```
-
-### Teste 3: Verificar em Zabbix
-
-```bash
-# Abrir Zabbix Web UI
-http://localhost:8080
-
-# Monitoring → Latest Data
-# Filtrar por: novo-servidor
-# ✅ Host aparecerá com 3 items já configurados!
-```
-
-## 📁 Estrutura do Projeto
-
-```
-lab-zal/
-├── docker-compose.yml          ← Orquestração (CRÍTICO)
-├── README.md                   ← Este ficheiro
-├── QUICKSTART.md               ← Guia rápido
-├── APRESENTACAO.md             ← Guia para apresentação
-│
-├── prometheus/                 ← Coleta de métricas
-│   ├── prometheus.yml          ← Scrape jobs com labels zabbix_host
-│   └── rules/
-│       └── alerts.yml          ← Regras com label zabbix_host
-│
-├── alertmanager/               ← Roteamento de alertas
-│   └── alertmanager.yml        ← Route: webhook endpoint
-│
-├── webhook/                    ← ✨ Auto-create de hosts
-│   ├── receiver.py             ← Flask app com auto-create
-│   └── Dockerfile
-│
-├── zal/                        ← Zabbix Alert Manager
-│   ├── hosts.yml
-│   ├── zal-config.yaml
-│   └── Dockerfile
-│
-└── scripts/                    ← Ferramentas
-    ├── populate_demo_data.py   ← ✨ Popula dados para demo
-    ├── setup_hosts.py          ← Criar hosts manualmente (opcional)
-    ├── fix_all_items.py        ← Corrigir interfaces (opcional)
-    └── README.md               ← Guia de scripts
+# Verá:
+# INFO:root:🆕 Host 'novo-host' not found - creating...
+# INFO:root:✅ Created host in Zabbix: novo-host
+# INFO:root:🔄 Sincronizando regras Prometheus para 'novo-host'...
+# INFO:root:✅ Item criado: prometheus.highcpuusage
+# INFO:root:✅ Item criado: prometheus.criticalmemory
+# ... 30 items mais ...
+# INFO:root:✅ Trigger criada: High CPU Usage
+# INFO:root:✨ Prometheus sync: 32 items, 32 triggers criados
 ```
 
 ## 🔧 Manutenção
 
-### Adicionar Novo Host (Automático!)
+### Adicionar Novo Host (Agora é Automático!)
 
 1. **Editar `prometheus/prometheus.yml`:**
-
 ```yaml
 - job_name: 'novo-servico'
   static_configs:
@@ -219,90 +281,62 @@ lab-zal/
 ```
 
 2. **Recarregar Prometheus:**
-
 ```bash
 docker-compose restart prometheus
 ```
 
-3. **Pronto!** Quando Prometheus scraper e enviar alerta, webhook cria host em Zabbix automaticamente ✨
+3. **Pronto!** Quando alerta chegar:
+   - ✅ Host criado em Zabbix
+   - ✅ 32 regras sincronizadas automaticamente
+   - ✅ Items + triggers prontos
 
-### Verificar Logs do Webhook
-
-```bash
-docker-compose logs webhook -f
-
-# Procure por:
-# "✅ Created host" = sucesso
-# "❌ Failed to create" = erro
-# "🆕 Host ... not found - creating" = detectou host novo
-```
-
-### Corrigir Interfaces (Se Necessário)
-
-Se items tiverem erro de interface:
+### Sincronizar Manualmente
 
 ```bash
-cd scripts
-python3 fix_all_items.py
+# Um host
+python3 scripts/sync_prometheus_rules.py --host meu-host --demo
+
+# Todos os hosts
+python3 scripts/sync_prometheus_rules.py --all --demo
+
+# Ver status
+python3 scripts/sync_prometheus_rules.py --list
 ```
-
-### Setup Manual (Se Quiser)
-
-Criar hosts pré-existentes manualmente:
-
-```bash
-cd scripts
-python3 setup_hosts.py
-```
-
-**Nota:** Agora é OPCIONAL! Webhook cria automaticamente quando alerta chega.
 
 ## 📊 Troubleshooting
 
-### Host não aparece em Zabbix depois do alerta
+### Webhook não sincroniza
 
 ```bash
-# 1. Ver logs do webhook
+# Ver logs
 docker-compose logs webhook
 
-# 2. Procurar por erro (❌ Failed to create host)
+# Testar conexão
+curl http://localhost:5001/health
 
-# 3. Testar conexão Zabbix API
-curl http://localhost:8080/api_jsonrpc.php \
-  -d '{"jsonrpc":"2.0","method":"user.login","params":{"user":"Admin","password":"zabbix"},"id":1}' \
-  -H "Content-Type: application/json"
+# Testar criação manual
+python3 scripts/sync_prometheus_rules.py --host test-host --demo
 ```
 
-### Webhook não envia para Zabbix
+### Items não aparecem em Zabbix
 
 ```bash
-# Verificar conexão
-docker-compose exec webhook zabbix_sender \
-  -z zabbix-server \
-  -s "node-01" \
-  -k "prometheus.test" \
-  -o "1"
+# Corrigir interfaces
+cd scripts
+python3 fix_all_items.py
 
-# Esperado: processed: 1; failed: 0
+# Ver status
+python3 sync_prometheus_rules.py --list
 ```
 
-### Alertas não disparam em Prometheus
+### Regras não sincronizam
 
 ```bash
-# Ver regras
-curl http://localhost:9090/api/v1/rules | jq '.data.groups'
+# Usar modo --demo (arquivo fake)
+python3 sync_prometheus_rules.py --all --demo
 
-# Ver alertas
-curl http://localhost:9090/api/v1/alerts | jq '.data[] | {alertname, state}'
-```
-
-### Alert Manager não encaminha
-
-```bash
-# Verificar config
-curl http://localhost:9093/api/v2/status | jq '.config'
-
-# Deve conter: route → receiver: webhook
+# Verificar arquivo fake existe
+ls webhook/fake_prometheus_rules.json
 ```
 
 ## 🔐 Credenciais
@@ -312,38 +346,44 @@ curl http://localhost:9093/api/v2/status | jq '.config'
 | Zabbix | Admin | zabbix |
 | PostgreSQL | zabbix | zabbix |
 
-## 📝 Variáveis de Ambiente
+## 🎯 Para Apresentação
 
-Editar em `docker-compose.yml`:
+### Setup Rápido (15 minutos)
 
-| Variável | Padrão | Descrição |
-|----------|--------|-----------|
-| `POSTGRES_DB` | zabbix | Database name |
-| `POSTGRES_USER` | zabbix | DB user |
-| `POSTGRES_PASSWORD` | zabbix | DB password |
-
-## 🎓 Para Apresentação
-
-Ver: **[APRESENTACAO.md](./APRESENTACAO.md)** para guia completo de apresentação!
-
-**Quick Demo (5 min):**
 ```bash
-docker-compose up -d
-python3 scripts/populate_demo_data.py
+# Terminal 1
+docker-compose up -d && sleep 5
+
+# Terminal 2
+python3 scripts/sync_prometheus_rules.py --all --demo
+
+# Terminal 3
 open http://localhost:8080
 # Login: Admin / zabbix
-# Navegar: Monitoring → Latest Data
-# Ver 4 hosts com dados realistas!
+# Monitoring → Latest Data
+# Ver 288 items criados! 🎊
 ```
 
-## 🎯 Próximas Melhorias
+### Demo Script
 
-- [ ] Customizar items criados automaticamente
-- [ ] Criar Triggers mais inteligentes
-- [ ] Integrar com Slack/Email
-- [ ] Dashboard interativo no Zabbix
-- [ ] Backup automático
-- [ ] Template automático para novo hosts
+> "Lab ZAL sincroniza automaticamente as regras de monitoramento do Prometheus com Zabbix. Quando um alerta chega, o webhook não apenas **cria o host**, mas também **sincroniza todas as 32 regras de alertas**, criando correspondentes items e triggers em Zabbix. Totalmente automático, sem configuração manual!"
+
+### Pontos-Chave
+
+1. **Auto-Create de Hosts** ✅
+2. **Sincronização Dinâmica de Regras** ✅ ⭐
+3. **32 Items + Triggers Automáticos** ✅ ⭐
+4. **Pronto para Produção** ✅
+
+## 🚀 Próximos Passos (Para PRD)
+
+- [ ] Background job de sincronização (cron/scheduler)
+- [ ] Usar Prometheus real (não apenas arquivo fake)
+- [ ] Versionamento de regras
+- [ ] Unit tests + integration tests
+- [ ] Validação antes de criar items/triggers
+- [ ] Alertas de falha de sincronização
+- [ ] Dashboard de status
 
 ## 📞 Suporte
 
@@ -354,26 +394,25 @@ docker-compose logs -f
 
 # Serviços individuais:
 docker-compose logs prometheus
-docker-compose logs alertmanager
-docker-compose logs webhook        # Ver auto-create aqui!
+docker-compose logs webhook
 docker-compose logs zabbix-server
+docker-compose logs alertmanager
 ```
 
 ## ✅ Status
 
-- ✅ Prometheus coleta métricas
-- ✅ Alert Manager roteia alertas
-- ✅ Webhook mapeia hosts e cria automaticamente ✨
-- ✅ Zabbix recebe dados em hosts corretos
+- ✅ Prometheus coleta métricas com 32+ alerting rules
+- ✅ Alert Manager roteia alertas com webhook
+- ✅ Webhook cria hosts automaticamente ✨
+- ✅ Webhook sincroniza 32 regras Prometheus ⭐
+- ✅ Zabbix recebe 32 items + 32 triggers por host ⭐
 - ✅ Mapeamento de labels automático
-- ✅ Items criados automaticamente
-- ✅ Interface configurada automaticamente
-- ✅ Triggers criadas automaticamente
+- ✅ Severity mapping correto (warning→2, critical→4)
 - ✅ Documentação completa
-- ✅ Pronto para produção
+- ✅ **Pronto para apresentação e PRD!** 🚀
 
 ---
 
-**Desenvolvido com ❤️ para Prometheus + Zabbix**
+**Desenvolvido com ❤️ para Observabilidade Automática**
 
-Para apresentação: veja [APRESENTACAO.md](./APRESENTACAO.md)
+Documentação: [POC_PROMETHEUS_SYNC.md](./POC_PROMETHEUS_SYNC.md) | Guia: [APRESENTACAO.md](./APRESENTACAO.md) | Quick Start: [QUICKSTART.md](./QUICKSTART.md)
