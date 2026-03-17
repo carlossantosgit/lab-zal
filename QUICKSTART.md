@@ -41,19 +41,19 @@ newgrp docker
 ### Opção 1: Git (recomendado)
 
 ```bash
-git clone https://github.com/your-org/lab-zal.git
+git clone https://github.com/carlossantosgit/lab-zal.git
 cd lab-zal
 ```
 
 ### Opção 2: Descarregar ZIP
 
 ```bash
-# Descarregar: https://github.com/your-org/lab-zal/archive/refs/heads/main.zip
+# Descarregar: https://github.com/carlossantosgit/lab-zal/archive/refs/heads/main.zip
 unzip lab-zal-main.zip
 cd lab-zal-main
 ```
 
-## 🚀 Iniciar (3 passos)
+## 🚀 Iniciar (3 passos simples)
 
 ### Passo 1: Verificar Docker
 
@@ -86,16 +86,7 @@ docker-compose up -d
 ```bash
 docker-compose ps
 
-# Esperado:
-# NAME                      STATUS            PORTS
-# lab-zal-alertmanager-1    Up 2 minutes      0.0.0.0:9093->9093/tcp
-# lab-zal-node-exporter-1   Up 2 minutes      0.0.0.0:9100->9100/tcp
-# lab-zal-postgres-1        Up 2 minutes      5432/tcp
-# lab-zal-prometheus-1      Up 2 minutes      0.0.0.0:9090->9090/tcp
-# lab-zal-webhook-1         Up 2 minutes      0.0.0.0:5001->5001/tcp
-# lab-zal-zabbix-server-1   Up 2 minutes      0.0.0.0:10051->10051/tcp
-# lab-zal-zabbix-web-1      Up 2 minutes      0.0.0.0:8080->8080/tcp (healthy)
-# lab-zal-zal-1             Up 2 minutes      0.0.0.0:9095->9095/tcp
+# Esperado: 8/8 containers UP
 ```
 
 ## 🌐 Aceder aos Serviços
@@ -108,6 +99,56 @@ Abrir no navegador:
 | **Prometheus** | http://localhost:9090 | - |
 | **Alert Manager** | http://localhost:9093 | - |
 | **Webhook** | http://localhost:5001/health | - |
+
+## ✨ Recurso Principal: Auto-Create de Hosts
+
+### O que é?
+
+Quando um alerta chega do Prometheus, o webhook **cria automaticamente** o host em Zabbix:
+
+```
+Prometheus Alert → Webhook verifica → Host não existe?
+→ Cria host + 3 items automaticamente ✨
+```
+
+**Sem necessidade de rodar scripts manuais!**
+
+### Teste o Auto-Create
+
+1. **Enviar alerta para host novo:**
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -d '{
+    "alerts": [
+      {
+        "status": "firing",
+        "labels": {
+          "alertname": "TestAlert",
+          "zabbix_host": "servidor-novo",
+          "severity": "critical"
+        }
+      }
+    ]
+  }' \
+  http://localhost:5001/alerts
+```
+
+2. **Ver em Zabbix** (http://localhost:8080):
+   - Monitoring → Latest Data
+   - Filtrar por: `servidor-novo`
+   - ✅ Host aparecerá com 3 items já criados!
+
+3. **Ver nos logs:**
+
+```bash
+docker-compose logs webhook | grep "servidor-novo"
+
+# Verá mensagens como:
+# "🆕 Host 'servidor-novo' not found - creating..."
+# "✅ Created host in Zabbix: servidor-novo"
+# "✅ Created item: prometheus.highcpu"
+```
 
 ## ✅ Testar que Tudo Funciona
 
@@ -126,54 +167,70 @@ docker-compose exec webhook zabbix_sender \
 Response from "zabbix-server:10051": "processed: 1; failed: 0; total: 1"
 ```
 
-### Teste 2: Ver Logs
+### Teste 2: Ver Logs em Tempo Real
 
 ```bash
 docker-compose logs webhook -f
+
+# Verá logs do webhook processando alertas
 ```
 
-**Você verá logs como:**
-```
-webhook-1 | 127.0.0.1 - - [16/Mar/2026 23:04:53] "GET /health HTTP/1.1" 200
+### Teste 3: Auto-Create em Ação
+
+```bash
+# Enviar alerta para 3 hosts novos
+for host in "api-server" "db-prod" "cache-01"; do
+  curl -s -X POST -H "Content-Type: application/json" \
+    -d "{\"alerts\":[{\"status\":\"firing\",\"labels\":{\"alertname\":\"Test\",\"zabbix_host\":\"$host\"}}]}" \
+    http://localhost:5001/alerts
+done
+
+# Esperar 2 segundos
+sleep 2
+
+# Verificar em Zabbix
+docker-compose exec webhook zabbix_sender \
+  -z zabbix-server \
+  -s "api-server" \
+  -k "prometheus.test" \
+  -o "1"
 ```
 
-## 🔧 Setup Inicial (One-Time)
+## 🔧 Setup Inicial (OPCIONALMENTE)
 
-Se for a primeira vez, precisa de criar os hosts no Zabbix:
+Se quiser criar hosts **antes** de enviar alertas:
 
 ```bash
 cd scripts
 python3 setup_hosts.py
 ```
 
-**Esperado:**
-```
-✅ Logged in
-✅ Created host: prometheus-server (ID: 10439)
-  ✅ Created item: prometheus.deadmansswitch
-  ✅ Created item: prometheus.highcpu
-  ✅ Created item: prometheus.lowmemory
-✅ Setup completed!
-```
+**Nota:** Isto é **OPCIONAL**! O webhook cria automaticamente quando recebe alertas.
 
 ## 📖 Próximos Passos
 
-1. **Ler documentação:**
+1. **Ler documentação completa:**
    ```bash
    cat README.md
    ```
 
-2. **Ver status em tempo real:**
+2. **Ver logs em tempo real:**
    ```bash
    docker-compose logs -f
    ```
 
-3. **Parar os serviços:**
+3. **Adicionar novo host em Prometheus:**
+   - Editar `prometheus/prometheus.yml`
+   - Adicionar scrape job com label `zabbix_host`
+   - Recarregar: `docker-compose restart prometheus`
+   - Esperar alerta → Host criado automaticamente em Zabbix! ✨
+
+4. **Parar os serviços:**
    ```bash
    docker-compose down
    ```
 
-4. **Remover tudo (incluindo dados):**
+5. **Remover tudo (incluindo dados):**
    ```bash
    docker-compose down -v
    ```
@@ -209,43 +266,37 @@ docker-compose logs zabbix-server
 # Esperar 30-60 segundos (init do Zabbix é lento)
 ```
 
-### "Webhook não conecta a Zabbix"
+### "Auto-create não está funcionando"
 
 **Verificar:**
 ```bash
 # Ver logs do webhook
-docker-compose logs webhook
+docker-compose logs webhook -f
 
-# Testar manualmente
-docker-compose exec webhook zabbix_sender -z zabbix-server -s "test" -k "test" -o "1"
+# Procurar por:
+# "✅ Created host" (sucesso)
+# "❌ Failed to create host" (erro)
+
+# Se houver erro, pode tentar corrigir interfaces:
+cd scripts
+python3 fix_all_items.py
 ```
 
-## 📊 Estrutura do Projeto
+### "Host criado mas sem items"
 
-```
-lab-zal/
-├─ README.md              ← Documentação completa
-├─ QUICKSTART.md          ← Este ficheiro
-├─ docker-compose.yml     ← Configuração
-├─ prometheus/            ← Coleta de métricas
-├─ alertmanager/          ← Roteamento de alertas
-├─ webhook/               ← Mapeamento dinâmico
-├─ zal/                   ← Zabbix AlertManager
-└─ scripts/               ← Setup & manutenção
+```bash
+cd scripts
+python3 fix_all_items.py
 ```
 
-## 🎯 Fluxo de Dados
+## 📊 Arquitetura Rápida
 
 ```
-Prometheus (coleta)
-    ↓
-Alert Manager (roteamento)
-    ↓
-Webhook (mapeamento)
-    ↓
-Zabbix (armazenamento)
-    ↓
-Zabbix UI (visualização)
+┌─────────────┐      ┌──────────────┐      ┌──────────┐      ┌────────────┐
+│ Prometheus  │ ───→ │ Alert Manager│ ───→ │ Webhook  │ ───→ │   Zabbix   │
+│  (Coleta)   │      │ (Roteamento) │      │(Auto-Cria)      │  (Storage) │
+└─────────────┘      └──────────────┘      └──────────┘      └────────────┘
+     9090                  9093              ✨ AUTO-CREATE    10051/8080
 ```
 
 ## 💡 Dicas
@@ -254,6 +305,7 @@ Zabbix UI (visualização)
 - **Ver métricas em tempo real**: `curl http://localhost:9090/api/v1/targets`
 - **Ver alertas**: `curl http://localhost:9093/api/v2/alerts`
 - **Logs em tempo real**: `docker-compose logs -f`
+- **Auto-create em ação**: `docker-compose logs webhook -f | grep "Created host"`
 
 ## 📞 Precisa de Ajuda?
 
@@ -274,4 +326,4 @@ docker-compose logs alertmanager
 
 ---
 
-**Bom uso! 🚀**
+**Bom uso! 🚀✨**

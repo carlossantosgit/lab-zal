@@ -2,11 +2,29 @@
 
 Scripts auxiliares para setup inicial e manutenção do Lab ZAL.
 
-## 📋 Setup Initial (One-Time)
+> ⚠️ **ATENÇÃO**: Com o novo **auto-create feature**, muitos destes scripts são **OPCIONAIS**!
+> O webhook cria hosts automaticamente quando recebe alertas. Use estes scripts apenas se precisar de setup manual.
 
-### `setup_hosts.py` - USE ESTE
+## ✨ Novo: Auto-Create Feature
 
-Cria hosts e items no Zabbix automaticamente.
+O webhook agora cria hosts **automaticamente**:
+- ✅ Detecta novo host via label `zabbix_host`
+- ✅ Verifica se existe em Zabbix via API
+- ✅ Se não existe, cria com interface e 3 items
+- ✅ Não precisa rodar scripts manuais!
+
+**Quando usar scripts:**
+- Setup manual de hosts pré-existentes
+- Corrigir interfaces se houver erro
+- Manutenção avançada
+
+---
+
+## 📋 Setup Inicial - OPCIONALMENTE
+
+### `setup_hosts.py` - OPCIONAL (Agora com Auto-Create)
+
+Cria hosts e items no Zabbix **manualmente**.
 
 ```bash
 python3 setup_hosts.py
@@ -15,9 +33,15 @@ python3 setup_hosts.py
 **O que faz:**
 - ✅ Cria grupo "Prometheus" no Zabbix
 - ✅ Cria hosts: node-01, prometheus-server
-- ✅ Cria 3 items por host (prometheus.highcpu, lowmemory, deadmansswitch)
+- ✅ Cria 3 items por host
+- ✅ Configura interfaces
 
-**Output:**
+**Quando usar:**
+- Setup inicial de hosts pré-existentes (node-01, prometheus-server)
+- Verificar que Zabbix API está funcionando
+- Recriar hosts se deletados acidentalmente
+
+**Output esperado:**
 ```
 ✅ Logged in
 Using group: 18
@@ -28,32 +52,33 @@ Using group: 18
 ✅ Setup completed!
 ```
 
-### `setup_zabbix.py` - DEPRECATED
+> **Nota**: Se rodar novamente, pulará hosts que já existem (não duplica)
 
-Versão antiga. Mantido para referência historicamente. Use `setup_hosts.py` em vez disso.
+---
 
 ## 🔧 Maintenance Scripts
 
 ### `fix_all_items.py` - USAR PARA MANUTENÇÃO
 
-Corrige interfaces de items após criar novos hosts.
+Corrige interfaces de items se houver erro.
 
 ```bash
 python3 fix_all_items.py
 ```
 
 **O que faz:**
-- ✅ Encontra todos os hosts (node-01, prometheus-server, etc)
+- ✅ Encontra todos os hosts em Zabbix
 - ✅ Carrega a interface correta de cada host
-- ✅ Atualiza todos os items com a interface
+- ✅ Atualiza todos os items com a interface correta
 
 **Quando usar:**
-- Após adicionar novo host com `setup_hosts.py`
-- Se items mostram "failed to fulfill the requests"
+- Se items mostram erro "failed to fulfill the requests"
+- Após criar hosts manualmente e precisar configurar interface
+- Manutenção preventiva
 
-**Output:**
+**Output esperado:**
 ```
-Found 2 target hosts
+Found 4 target hosts
 
 🔧 Host: prometheus-server
    Interface ID: 3
@@ -62,75 +87,113 @@ Found 2 target hosts
    ✅ prometheus.highcpu
    ✅ prometheus.lowmemory
 
+🔧 Host: node-01
+   Interface ID: 2
+   Found 3 items
+   ✅ prometheus.deadmansswitch
+   ✅ prometheus.highcpu
+   ✅ prometheus.lowmemory
+
 ✅ Done!
 ```
 
-### `fix_items.py` - OBSOLETO
+### Scripts Deprecated
 
-Versão antiga de correção. Mantido para backup histórico. Use `fix_all_items.py`.
+- `setup_zabbix.py` - Versão antiga. Mantido para referência histórica.
+- `fix_items.py` - Versão antiga de correção. Use `fix_all_items.py`.
 
-## 📖 Como Adicionar Novo Host
+---
 
-### Passo 1: Modificar Prometheus
+## 📖 Fluxo Recomendado Agora
 
-Editar `prometheus/prometheus.yml`:
+### Cenário 1: Adicionar Host Novo (Recomendado - AUTOMÁTICO)
 
+**Nenhum script necessário!** O webhook cria tudo sozinho:
+
+1. Adicionar ao `prometheus/prometheus.yml`:
 ```yaml
-- job_name: 'node-exporter-prod'
+- job_name: 'node-exporter-db'
   static_configs:
-    - targets: ['prod-server.example.com:9100']
+    - targets: ['db-server.example.com:9100']
       labels:
-        zabbix_host: srv-prod
+        zabbix_host: srv-db
 ```
 
-### Passo 2: Recarregar Prometheus
-
+2. Recarregar Prometheus:
 ```bash
 docker-compose restart prometheus
 ```
 
-### Passo 3: Executar Setup
+3. **Pronto!** Quando Prometheus scraper o host e enviar alerta, webhook cria automaticamente em Zabbix ✨
+
+### Cenário 2: Setup Inicial (Se Necessário)
+
+Se quiser criar hosts **antes** de receber alertas:
 
 ```bash
 cd scripts
 python3 setup_hosts.py
 ```
 
-Irá:
-1. ✅ Detectar novo host "srv-prod"
-2. ✅ Criar no Zabbix (ID gerado automaticamente)
-3. ✅ Criar os 3 items
-4. ✅ Configurar interface
+### Cenário 3: Corrigir Interface (Manutenção)
 
-### Passo 4: Corrigir Interfaces (se necessário)
+Se items tiverem erro de interface:
 
 ```bash
+cd scripts
 python3 fix_all_items.py
 ```
 
-## 🧪 Testes
+---
 
-### Testar se item funciona
+## 🧪 Testar Items
+
+### Teste Manual com zabbix_sender
 
 ```bash
 docker-compose exec webhook zabbix_sender \
   -z zabbix-server \
-  -s "srv-prod" \
-  -k "prometheus.test" \
-  -o "999"
+  -s "node-01" \
+  -k "prometheus.highcpu" \
+  -o "1"
 ```
 
 Esperado: `processed: 1; failed: 0`
 
+### Teste com Webhook (Auto-Create)
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -d '{
+    "alerts": [
+      {
+        "status": "firing",
+        "labels": {
+          "alertname": "TestAlert",
+          "zabbix_host": "novo-servidor",
+          "severity": "critical"
+        }
+      }
+    ]
+  }' \
+  http://localhost:5001/alerts
+```
+
+Resultado: Host `novo-servidor` será criado em Zabbix automaticamente!
+
+---
+
 ## 📋 Referência Rápida
 
-| Tarefa | Comando |
-|--------|---------|
-| Setup inicial | `python3 setup_hosts.py` |
-| Corrigir interfaces | `python3 fix_all_items.py` |
-| Ver logs Zabbix | `docker-compose logs zabbix-server` |
-| Ver logs Webhook | `docker-compose logs webhook` |
-| Testar zabbix_sender | `docker-compose exec webhook zabbix_sender ...` |
+| Tarefa | Comando | Necessário? |
+|--------|---------|-----------|
+| Setup hosts pré-existentes | `python3 setup_hosts.py` | ❌ Opcional |
+| Corrigir interfaces | `python3 fix_all_items.py` | ✅ Se erro |
+| Auto-criar novo host | Enviar alerta via webhook | ✅ Recomendado |
+| Ver logs Zabbix | `docker-compose logs zabbix-server` | ✅ Diagnóstico |
+| Ver logs Webhook | `docker-compose logs webhook -f` | ✅ Ver auto-create |
+
+---
 
 ## ⚙️ Dependências
 
@@ -138,8 +201,29 @@ Esperado: `processed: 1; failed: 0`
 pip install requests
 ```
 
-## 📝 Notas
+Já incluído nos containers!
+
+---
+
+## 📝 Notas Técnicas
 
 - Scripts conectam a `http://localhost:8080/api_jsonrpc.php`
 - Credenciais: Admin / zabbix
-- Todos os scripts suportam dry-run (verificação sem fazer mudanças)
+- Todos suportam **dry-run** (sem fazer mudanças)
+- Webhook usa mesma API para auto-create
+
+---
+
+## 🚀 Sumário
+
+**Antes (Manual):**
+1. Adicionar em prometheus.yml
+2. Rodar `python3 setup_hosts.py` ← Passo necessário
+3. Pode rodar `python3 fix_all_items.py` se erro
+
+**Agora (Automático):**
+1. Adicionar em prometheus.yml
+2. ✨ Webhook faz o resto automaticamente
+3. Scripts são só ferramentas opcionais de manutenção
+
+Muito mais simples! 🎉
