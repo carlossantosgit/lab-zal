@@ -2,7 +2,7 @@ FROM python:3.11
 
 RUN apt update && apt install -y zabbix-sender
 
-RUN pip install flask
+RUN pip install flask requests
 
 WORKDIR /app
 
