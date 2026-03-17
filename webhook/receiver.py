@@ -3,6 +3,7 @@ import subprocess
 import logging
 import requests
 import time
+from prometheus_sync import sync_prometheus_rules_for_host
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -206,7 +207,7 @@ def fix_item_interfaces(hostid, auth_token):
 
 
 def ensure_host_exists(zabbix_host, auth_token):
-    """Ensure host exists in Zabbix, create if needed"""
+    """Ensure host exists in Zabbix, create if needed and sync Prometheus rules"""
     if host_exists(zabbix_host, auth_token):
         logging.info(f"✓ Host '{zabbix_host}' already exists")
         return True
@@ -220,6 +221,25 @@ def ensure_host_exists(zabbix_host, auth_token):
 
     items_created = create_items(hostid, auth_token)
     logging.info(f"✅ Created host '{zabbix_host}' with {items_created} items")
+
+    # 🔄 Sincronizar regras Prometheus do arquivo fake
+    logging.info(f"🔄 Sincronizando regras Prometheus para '{zabbix_host}'...")
+    try:
+        sync_result = sync_prometheus_rules_for_host(
+            hostname=zabbix_host,
+            hostid=hostid,
+            auth_token=auth_token,
+            use_fake=True  # Usar arquivo fake para demo
+        )
+
+        if sync_result.get("success"):
+            logging.info(f"✨ Prometheus sync: {sync_result.get('items_created')} items, "
+                        f"{sync_result.get('triggers_created')} triggers criados")
+        else:
+            logging.warning(f"⚠️  Prometheus sync falhou: {sync_result.get('message')}")
+
+    except Exception as e:
+        logging.error(f"❌ Erro ao sincronizar Prometheus rules: {str(e)}")
 
     return True
 
