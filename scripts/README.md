@@ -227,3 +227,43 @@ Já incluído nos containers!
 3. Scripts são só ferramentas opcionais de manutenção
 
 Muito mais simples! 🎉
+
+---
+
+## 🎨 Script de Demonstração
+
+### `populate_demo_data.py` - PARA APRESENTAÇÃO
+
+Popula dados realistas em Zabbix para demonstração.
+
+```bash
+python3 populate_demo_data.py
+```
+
+**O que faz:**
+- ✅ Cria 4 hosts de demonstração:
+  - prod-db-01 (Production Database)
+  - api-server-01 (API Server)
+  - cache-redis-01 (Redis Cache)
+  - app-web-01 (Web Application)
+- ✅ Cada host com 6 items (CPU, Memory, Requests, Latency, etc)
+- ✅ Envia dados de teste via webhook
+- ✅ Configura interfaces automaticamente
+
+**Resultado:**
+```
+✅ 4 hosts criados
+✅ 24 items criados (6 por host)
+✅ Dados de teste populados
+
+→ Abrir http://localhost:8080
+→ Monitoring → Latest Data
+→ Ver dados realistas de 4 hosts!
+```
+
+**Perfeito para:**
+- Demonstrações ao vivo
+- Apresentações
+- Testes de alerts
+- Screenshots para documentação
+
