@@ -129,9 +129,10 @@ def create_host(zabbix_host, auth_token):
         }]
     }, auth_token)
 
-    if result and isinstance(result, list) and len(result) > 0:
-        logging.info(f"✅ Created host in Zabbix: {zabbix_host} (ID: {result[0]})")
-        return result[0]
+    if result and isinstance(result, dict) and "hostids" in result:
+        hostid = result["hostids"][0]
+        logging.info(f"✅ Created host in Zabbix: {zabbix_host} (ID: {hostid})")
+        return hostid
 
     logging.error(f"❌ Failed to create host '{zabbix_host}': {result}")
     return None
