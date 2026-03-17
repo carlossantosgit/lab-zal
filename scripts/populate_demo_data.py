@@ -165,32 +165,46 @@ def fix_item_interfaces(hostid, auth_token):
             "interfaceid": interfaceid
         }, auth_token)
 
-def create_demo_triggers(hostid, auth_token):
+def create_demo_triggers(hostname, hostid, auth_token):
     """Criar triggers de demonstração"""
+    # Expresões: {hostname:item.key.last()}>threshold
+    expr1 = "{" + hostname + ":prometheus.highcpu.last()}>0"
+    expr2 = "{" + hostname + ":prometheus.lowmemory.last()}>0"
+    expr3 = "{" + hostname + ":custom.errors.last()}>1"
+
     triggers = [
         {
-            "description": "High CPU Usage",
-            "expression": f"{{TRIGGER.VALUE}}=1 and {{prometheus.highcpu:last()}}>0",
-            "severity": 3  # High
+            "description": "High CPU Usage on {HOST.NAME}",
+            "expression": expr1,
+            "priority": 2  # Average
         },
         {
-            "description": "Low Memory",
-            "expression": f"{{TRIGGER.VALUE}}=1 and {{prometheus.lowmemory:last()}}>0",
-            "severity": 2  # Average
+            "description": "Low Memory on {HOST.NAME}",
+            "expression": expr2,
+            "priority": 2  # Average
+        },
+        {
+            "description": "High Error Rate on {HOST.NAME}",
+            "expression": expr3,
+            "priority": 2  # Average
         }
     ]
-    
+
+    created = 0
     for trigger_info in triggers:
         result = zabbix_api_call("trigger.create", {
             "description": trigger_info["description"],
             "expression": trigger_info["expression"],
-            "severity": trigger_info["severity"]
+            "priority": trigger_info["priority"]
         }, auth_token)
-        
-        if result:
+
+        if result and isinstance(result, dict) and "triggerids" in result:
+            created += 1
             print(f"   ✅ Trigger: {trigger_info['description']}")
         else:
-            print(f"   ⚠️  Trigger (opcional): {trigger_info['description']}")
+            print(f"   ⚠️  Trigger: {trigger_info['description']}")
+
+    return created
 
 def send_test_data(hostname, auth_token):
     """Enviar dados de teste no webhook para popular items"""
@@ -264,7 +278,7 @@ for hostname, display_name in demo_hosts:
     
     # Criar triggers (opcional)
     print(f"  Criando triggers...")
-    create_demo_triggers(hostid, auth)
+    create_demo_triggers(hostname, hostid, auth)
     
     # Enviar dados de teste
     print(f"  Enviando dados de teste...")
