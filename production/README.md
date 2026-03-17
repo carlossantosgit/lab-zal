@@ -19,7 +19,21 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2️⃣ Configurar URLs
+### 2️⃣ Analisar mapeamento (IMPORTANTE!)
+
+```bash
+# PRIMEIRO: Executar análise para mapear Prometheus labels com Zabbix groups
+python3 analise_mapeamento.py
+```
+
+**Isso gera:**
+- Lista de Zabbix Host Groups
+- Lista de Prometheus "app" labels
+- Tabela de mapeamento recomendado
+
+**Criar arquivo:** `MAPPING_PROMETHEUS_ZABBIX.md` com o mapeamento completo
+
+### 3️⃣ Configurar URLs
 
 Editar `config.py`:
 ```python
@@ -34,7 +48,7 @@ ZABBIX_USER = "Admin"
 ZABBIX_PASSWORD = "sua-senha"
 ```
 
-### 3️⃣ Validar conexão
+### 4️⃣ Validar conexão
 
 ```bash
 python3 validate.py
@@ -48,7 +62,7 @@ Retorna:
 ✅ VALIDAÇÃO OK!
 ```
 
-### 4️⃣ Sincronizar
+### 5️⃣ Sincronizar
 
 ```bash
 # Ver hosts em Zabbix
@@ -68,6 +82,7 @@ python3 sync_prometheus.py --host seu-host
 | Arquivo | Descrição |
 |---------|-----------|
 | `sync_prometheus.py` | ⭐ Script principal de sincronização |
+| `analise_mapeamento.py` | 🔍 Análise de mapeamento (Prometheus labels → Zabbix groups) |
 | `validate.py` | Valida conectividade |
 | `config.py` | Configuração (editar URLs/credenciais) |
 | `requirements.txt` | Dependências Python |
@@ -80,6 +95,38 @@ python3 sync_prometheus.py --host seu-host
 - ✅ Sincroniza como items em Zabbix
 - ✅ Cria triggers com severidades corretas
 - ✅ Idempotente (sem duplicatas)
+- ✅ Mapeia hosts em grupos corretos (com análise prévia)
+
+---
+
+## 🔍 Análise de Mapeamento
+
+Antes de sincronizar em produção, você deve analisar e documentar o mapeamento:
+
+```bash
+# 1. Executar análise
+python3 analise_mapeamento.py
+
+# Isso retorna:
+# - Zabbix Host Groups disponíveis
+# - Prometheus "app" labels encontrados
+# - Tabela de mapeamento recomendado
+
+# 2. Criar arquivo: MAPPING_PROMETHEUS_ZABBIX.md
+# Com conteúdo como:
+mapping:
+  database:
+    zabbix_group: "Databases"
+    group_id: "11"
+    hosts:
+      - prod-db-01
+      - prod-db-02
+  api:
+    zabbix_group: "API Servers"
+    group_id: "12"
+    hosts:
+      - prod-api-01
+```
 
 ---
 
@@ -123,10 +170,11 @@ curl http://seu-zabbix-qua:8080
 ## 📱 Comandos Principais
 
 ```bash
-python3 validate.py                    # Validar config
-python3 sync_prometheus.py --list      # Ver hosts
-python3 sync_prometheus.py --all       # Sincronizar tudo
-python3 sync_prometheus.py --host X    # Sincronizar host X
+python3 analise_mapeamento.py             # Analisar mapeamento
+python3 validate.py                       # Validar config
+python3 sync_prometheus.py --list         # Ver hosts
+python3 sync_prometheus.py --all          # Sincronizar tudo
+python3 sync_prometheus.py --host X       # Sincronizar host X
 ```
 
 ---
