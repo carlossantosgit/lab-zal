@@ -6,6 +6,19 @@
         "interval": "1m",
         "rules": [
           {
+            "alert": "DemoValidacaoE2E",
+            "expr": "up == 1",
+            "for": "1m",
+            "labels": {
+              "severity": "critical",
+              "team": "devops"
+            },
+            "annotations": {
+              "summary": "\ud83d\ude80 DEMO: Regra customizada criada em {{ $timestamp }}",
+              "description": "Esta regra foi criada para VALIDA\u00c7\u00c3O END-TO-END do fluxo Prometheus\u2192Zabbix"
+            }
+          },
+          {
             "alert": "HighCPUUsage",
             "expr": "node_cpu_usage > 80",
             "for": "5m",
