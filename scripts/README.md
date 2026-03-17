@@ -230,7 +230,73 @@ Muito mais simples! 🎉
 
 ---
 
-## 🎨 Script de Demonstração
+## ✅ Scripts Novos - POC Validação
+
+### `validate_e2e.py` - VALIDAÇÃO END-TO-END ⭐
+
+**Novo!** Demonstra pipeline completa de ponta a ponta.
+
+```bash
+python3 validate_e2e.py
+```
+
+**O que faz:**
+- ETAPA 1: Valida conectividade (Zabbix, Prometheus, Webhook)
+- ETAPA 2: Carrega 32 regras Prometheus atuais
+- ETAPA 3: Cria nova regra customizada (DemoValidacaoE2E)
+- ETAPA 4: Cria host de teste e sincroniza 33 regras
+- ETAPA 5: Valida items e triggers no Zabbix API
+- ETAPA 6: Mostra resumo completo
+
+**Resultado:**
+```
+✅ 33 items criados (um por cada regra!)
+✅ 33 triggers criadas (com severidades corretas)
+✨ Prova visual que pipeline completa funciona!
+```
+
+**Quando usar:**
+- Validar que tudo está funcionando
+- Demonstração rápida (2 min)
+- Testar integração Prometheus ↔ Zi Zabbix
+- Apresentações ao cliente
+
+**Tempo:** ~2-3 segundos
+
+**Referência:** [E2E_VALIDATION_REPORT.md](../E2E_VALIDATION_REPORT.md)
+
+### `sync_prometheus_rules.py` - SINCRONIZAR REGRAS ⭐
+
+**Sincroniza manualmente as 32 regras Prometheus com Zabbix.**
+
+```bash
+# Ver todos os hosts
+python3 sync_prometheus_rules.py --list
+
+# Sincronizar um host
+python3 sync_prometheus_rules.py --host prod-db-01 --demo
+
+# Sincronizar todos
+python3 sync_prometheus_rules.py --all --demo
+```
+
+**Resultado:**
+```
+✅ Host: prod-db-01
+✅ Items criados: 32
+✅ Triggers criadas: 32
+```
+
+**Quando usar:**
+- Sincronizar regras manualmente
+- Demo rápida do POC
+- Testes de sincronização
+
+**Tempo:** ~1-2 segundos por host
+
+---
+
+## 🎨 Scripts Antigos (Ainda Funcionam)
 
 ### `populate_demo_data.py` - PARA APRESENTAÇÃO
 
