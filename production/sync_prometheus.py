@@ -23,7 +23,10 @@ from config import (
     ZABBIX_API_URL,
     ZABBIX_USER,
     ZABBIX_PASSWORD,
-    PROMETHEUS_API_URL,
+    PROMETHEUS_URL,
+    PROMETHEUS_USER,
+    PROMETHEUS_PASS,
+    PROMETHEUS_VERIFY_SSL,
     SEVERITY_MAP
 )
 
@@ -62,8 +65,15 @@ class PrometheusSync:
     def get_prometheus_rules(self) -> List[Dict]:
         """Obtém alerting rules do Prometheus"""
         try:
-            url = f"{PROMETHEUS_API_URL}/api/v1/rules"
-            resp = requests.get(url, timeout=10)
+            url = f"{PROMETHEUS_URL}/api/v1/rules"
+            auth = (PROMETHEUS_USER, PROMETHEUS_PASS) if PROMETHEUS_PASS else None
+
+            resp = requests.get(
+                url,
+                auth=auth,
+                verify=PROMETHEUS_VERIFY_SSL,
+                timeout=10
+            )
             resp.raise_for_status()
 
             data = resp.json()

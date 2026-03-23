@@ -20,8 +20,18 @@ ZABBIX_PASSWORD = os.getenv("ZABBIX_PASSWORD", "zabbix")
 # PROMETHEUS
 # ============================================================================
 
-# URL da API Prometheus
-PROMETHEUS_API_URL = os.getenv("PROMETHEUS_API_URL", "http://prometheus:9090")
+# URL da API Prometheus (PRODUÇÃO)
+PROMETHEUS_URL = os.getenv(
+    "PROMETHEUS_URL",
+    "https://prometheus-prod-srv01.spms.min-saude.pt"
+)
+
+# Credenciais Prometheus (HTTPS com autenticação básica)
+PROMETHEUS_USER = os.getenv("PROMETHEUS_USER", "prometheus")
+PROMETHEUS_PASS = os.getenv("PROMETHEUS_PASS", "")
+
+# Flag para verificação de SSL (em produção, deixar True)
+PROMETHEUS_VERIFY_SSL = os.getenv("PROMETHEUS_VERIFY_SSL", "False").lower() == "true"
 
 # ============================================================================
 # MAPEAMENTO DE SEVERIDADE
@@ -58,9 +68,15 @@ def validate_config():
         return False
 
     try:
-        # Testar Prometheus
-        resp = requests.get(f"{PROMETHEUS_API_URL}/-/healthy", timeout=5)
-        print(f"✅ Prometheus: {PROMETHEUS_API_URL}")
+        # Testar Prometheus com autenticação básica
+        auth = (PROMETHEUS_USER, PROMETHEUS_PASS) if PROMETHEUS_PASS else None
+        resp = requests.get(
+            f"{PROMETHEUS_URL}/-/healthy",
+            auth=auth,
+            verify=PROMETHEUS_VERIFY_SSL,
+            timeout=5
+        )
+        print(f"✅ Prometheus: {PROMETHEUS_URL}")
     except Exception as e:
         print(f"❌ Prometheus não acessível: {str(e)}")
         return False

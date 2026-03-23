@@ -11,7 +11,10 @@ from config import (
     ZABBIX_API_URL,
     ZABBIX_USER,
     ZABBIX_PASSWORD,
-    PROMETHEUS_API_URL
+    PROMETHEUS_URL,
+    PROMETHEUS_USER,
+    PROMETHEUS_PASS,
+    PROMETHEUS_VERIFY_SSL
 )
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -26,7 +29,13 @@ def validate():
     # 1. Testar Prometheus
     logger.info("\n1️⃣  Testando Prometheus...")
     try:
-        resp = requests.get(f"{PROMETHEUS_API_URL}/-/healthy", timeout=5)
+        auth = (PROMETHEUS_USER, PROMETHEUS_PASS) if PROMETHEUS_PASS else None
+        resp = requests.get(
+            f"{PROMETHEUS_URL}/-/healthy",
+            auth=auth,
+            verify=PROMETHEUS_VERIFY_SSL,
+            timeout=5
+        )
         if resp.status_code == 200:
             logger.info("   ✅ Prometheus OK")
         else:
@@ -61,7 +70,13 @@ def validate():
     # 3. Contar regras Prometheus
     logger.info("\n3️⃣  Contando regras Prometheus...")
     try:
-        resp = requests.get(f"{PROMETHEUS_API_URL}/api/v1/rules", timeout=5)
+        auth = (PROMETHEUS_USER, PROMETHEUS_PASS) if PROMETHEUS_PASS else None
+        resp = requests.get(
+            f"{PROMETHEUS_URL}/api/v1/rules",
+            auth=auth,
+            verify=PROMETHEUS_VERIFY_SSL,
+            timeout=5
+        )
         data = resp.json()
 
         rule_count = 0

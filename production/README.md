@@ -1,10 +1,12 @@
-# 🚀 Sincronização Prometheus → Zabbix
+# 🚀 Sincronização Prometheus → Zabbix (PRODUÇÃO)
 
-Sistema Python para sincronizar alerting rules do Prometheus com Zabbix.
+Sistema Python para sincronizar alerting rules do Prometheus em produção com Zabbix em qualidade.
 
 **Arquitetura:**
 ```
-Prometheus (PRODUÇÃO)  →  Python Scripts (QUA)  →  Zabbix (QUA)
+Prometheus PRODUÇÃO (HTTPS)  →  Python Scripts (QUA)  →  Zabbix (QUA)
+prometheus-prod-srv01.spms.min-saude.pt      |      zabbix-server
+                                        Autenticação Básica
 ```
 
 ---
@@ -14,43 +16,79 @@ Prometheus (PRODUÇÃO)  →  Python Scripts (QUA)  →  Zabbix (QUA)
 ### 1️⃣ Instalar dependências
 
 ```bash
+cd ~/lab-zal/production
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2️⃣ Analisar mapeamento (IMPORTANTE!)
+### 2️⃣ Configurar credenciais (Variáveis de Ambiente)
+
+Criar arquivo `.env` na pasta production:
 
 ```bash
-# PRIMEIRO: Executar análise para mapear Prometheus labels com Zabbix groups
-python3 analise_mapeamento.py
+# Prometheus PRD (HTTPS com autenticação básica)
+PROMETHEUS_URL=https://prometheus-prod-srv01.spms.min-saude.pt
+PROMETHEUS_USER=prometheus
+PROMETHEUS_PASS=5FapePt9erAhCNdylnii8s6zr2957pRx1fNGTUUR
+PROMETHEUS_VERIFY_SSL=False  # False se usar cert auto-assinado
+
+# Zabbix QUA
+ZABBIX_API_URL=http://seu-zabbix-qua:8080/api_jsonrpc.php
+ZABBIX_USER=Admin
+ZABBIX_PASSWORD=sua-senha-zabbix
 ```
 
-**Isso gera:**
-- Lista de Zabbix Host Groups
-- Lista de Prometheus "app" labels
-- Tabela de mapeamento recomendado
+**Ou editar `config.py` diretamente:**
 
-**Criar arquivo:** `MAPPING_PROMETHEUS_ZABBIX.md` com o mapeamento completo
-
-### 3️⃣ Configurar URLs
-
-Editar `config.py`:
 ```python
-# Prometheus em PRODUÇÃO
-PROMETHEUS_API_URL = "http://seu-prometheus-prod:9090"
+# Prometheus em PRODUÇÃO (com autenticação)
+PROMETHEUS_URL = "https://prometheus-prod-srv01.spms.min-saude.pt"
+PROMETHEUS_USER = "prometheus"
+PROMETHEUS_PASS = "5FapePt9erAhCNdylnii8s6zr2957pRx1fNGTUUR"
+PROMETHEUS_VERIFY_SSL = False  # True para validar certificado
 
 # Zabbix em QUA
 ZABBIX_API_URL = "http://seu-zabbix-qua:8080/api_jsonrpc.php"
-
-# Credenciais Zabbix
 ZABBIX_USER = "Admin"
 ZABBIX_PASSWORD = "sua-senha"
+```
+
+### 3️⃣ Exemplo de Chamada com Autenticação Básica
+
+```python
+import requests
+
+PROMETHEUS_URL = "https://prometheus-prod-srv01.spms.min-saude.pt"
+PROMETHEUS_USER = "prometheus"
+PROMETHEUS_PASS = "5FapePt9erAhCNdylnii8s6zr2957pRx1fNGTUUR"
+
+# Obter alerting rules
+response = requests.get(
+    f"{PROMETHEUS_URL}/api/v1/rules",
+    auth=(PROMETHEUS_USER, PROMETHEUS_PASS),
+    verify=False  # ou apontar para o cert da CA interna
+)
+
+# Obter status de saúde
+response = requests.get(
+    f"{PROMETHEUS_URL}/-/healthy",
+    auth=(PROMETHEUS_USER, PROMETHEUS_PASS),
+    verify=False
+)
+
+# Obter alertas ativos
+response = requests.get(
+    f"{PROMETHEUS_URL}/api/v1/alerts",
+    auth=(PROMETHEUS_USER, PROMETHEUS_PASS),
+    verify=False
+)
 ```
 
 ### 4️⃣ Validar conexão
 
 ```bash
+source venv/bin/activate
 python3 validate.py
 ```
 
@@ -59,110 +97,150 @@ Retorna:
 ✅ Prometheus OK
 ✅ Zabbix OK
 ✅ 32 alerting rules encontradas
-✅ VALIDAÇÃO OK!
+✅ 5 hosts encontrados em Zabbix
+✅ VALIDAÇÃO OK - Sistema pronto para sincronização!
 ```
 
-### 5️⃣ Sincronizar
+### 5️⃣ Análise de Mapeamento (IMPORTANTE!)
 
 ```bash
-# Ver hosts em Zabbix
+source venv/bin/activate
+python3 analise_mapeamento.py
+```
+
+Isso gera:
+- Lista de Zabbix Host Groups
+- Lista de Prometheus "app" labels
+- Tabela de mapeamento recomendado
+
+Criar arquivo: `MAPPING_PROMETHEUS_ZABBIX.md` com mapeamento
+
+### 6️⃣ Sincronizar Regras
+
+```bash
+source venv/bin/activate
+
+# Ver hosts disponíveis
 python3 sync_prometheus.py --list
 
-# Sincronizar todos
+# Sincronizar todos os hosts
 python3 sync_prometheus.py --all
 
 # Sincronizar um host específico
 python3 sync_prometheus.py --host seu-host
+
+# Modo verbose (com mais detalhes)
+python3 sync_prometheus.py --all --verbose
 ```
 
 ---
 
-## 📋 Arquivos
+## 📋 Arquivos de Configuração
 
 | Arquivo | Descrição |
 |---------|-----------|
+| `config.py` | ⚙️ Configuração (URLs, credenciais, environment vars) |
 | `sync_prometheus.py` | ⭐ Script principal de sincronização |
-| `analise_mapeamento.py` | 🔍 Análise de mapeamento (Prometheus labels → Zabbix groups) |
-| `validate.py` | Valida conectividade |
-| `config.py` | Configuração (editar URLs/credenciais) |
-| `requirements.txt` | Dependências Python |
+| `validate.py` | ✅ Validação de conectividade |
+| `analise_mapeamento.py` | 🔍 Análise de mapeamento (labels → groups) |
+| `requirements.txt` | 📦 Dependências Python |
 
 ---
 
-## 🎯 O que faz
+## 🔐 Autenticação Prometheus (HTTPS)
 
+O Prometheus em produção usa:
+- **URL:** `https://prometheus-prod-srv01.spms.min-saude.pt`
+- **Método:** Autenticação básica HTTP
+- **Usuário:** `prometheus`
+- **Senha:** `5FapePt9erAhCNdylnii8s6zr2957pRx1fNGTUUR`
+
+**Nota sobre SSL:**
+- Se usar certificado auto-assinado: `PROMETHEUS_VERIFY_SSL = False`
+- Se usar certificado válido: `PROMETHEUS_VERIFY_SSL = True`
+- Ou apontar arquivo CA: `verify="/path/to/ca-bundle.crt"`
+
+---
+
+## 🎯 O que o Script Faz
+
+- ✅ Conecta ao Prometheus com autenticação básica (HTTPS)
 - ✅ Lê alerting rules do Prometheus
 - ✅ Sincroniza como items em Zabbix
 - ✅ Cria triggers com severidades corretas
 - ✅ Idempotente (sem duplicatas)
-- ✅ Mapeia hosts em grupos corretos (com análise prévia)
+- ✅ Mapeia hosts em grupos corretos
 
 ---
 
-## 🔍 Análise de Mapeamento
+## 🔍 Análise de Mapeamento (Prometheus → Zabbix)
 
-Antes de sincronizar em produção, você deve analisar e documentar o mapeamento:
+Antes de sincronizar em produção:
 
 ```bash
 # 1. Executar análise
 python3 analise_mapeamento.py
 
-# Isso retorna:
-# - Zabbix Host Groups disponíveis
-# - Prometheus "app" labels encontrados
-# - Tabela de mapeamento recomendado
-
 # 2. Criar arquivo: MAPPING_PROMETHEUS_ZABBIX.md
-# Com conteúdo como:
-mapping:
-  database:
-    zabbix_group: "Databases"
-    group_id: "11"
-    hosts:
-      - prod-db-01
-      - prod-db-02
-  api:
-    zabbix_group: "API Servers"
-    group_id: "12"
-    hosts:
-      - prod-api-01
+# Com o mapeamento:
+# {
+#   "database": {
+#     "zabbix_group": "Databases",
+#     "group_id": "11",
+#     "hosts": ["prod-db-01", "prod-db-02"]
+#   },
+#   "api": {
+#     "zabbix_group": "API Servers",
+#     "group_id": "12",
+#     "hosts": ["prod-api-01"]
+#   }
+# }
 ```
 
 ---
 
 ## ⏰ Automação (Cron)
 
-Adicionar ao crontab para sincronizar a cada hora:
+Para sincronizar a cada hora em produção:
 
 ```bash
 crontab -e
 
-# Sincronizar a cada hora
-0 * * * * cd /home/seu-usuario/prometheus-sync && source venv/bin/activate && python3 sync_prometheus.py --all >> /var/log/prometheus-sync.log 2>&1
+# Adicionar:
+0 * * * * cd /home/seu-usuario/lab-zal/production && source venv/bin/activate && python3 sync_prometheus.py --all >> /var/log/prometheus-zabbix-sync.log 2>&1
 ```
 
 ---
 
 ## 🔍 Troubleshooting
 
-**Erro de conexão:**
-```bash
-# Testar Prometheus
-curl http://seu-prometheus-prod:9090/-/healthy
+### Erro de autenticação Prometheus
 
-# Testar Zabbix
-curl http://seu-zabbix-qua:8080
+```bash
+# Testar conexão manualmente
+curl -u prometheus:5FapePt9erAhCNdylnii8s6zr2957pRx1fNGTUUR \
+  https://prometheus-prod-srv01.spms.min-saude.pt/-/healthy
+
+# Se tiver erro de SSL:
+curl -k -u prometheus:5FapePt9erAhCNdylnii8s6zr2957pRx1fNGTUUR \
+  https://prometheus-prod-srv01.spms.min-saude.pt/-/healthy
 ```
 
-**Erro de autenticação:**
+### Erro de conexão Zabbix
+
 ```bash
+# Testar Zabbix
+curl http://seu-zabbix-qua:8080
+
 # Verificar credenciais em config.py
 ```
 
-**Items já existem:**
+### Items ou triggers já existem
+
 ```bash
 # Normal! Sincronização é idempotente
-# Continua sincronizando outros items
+# Continua sincronizando novos items
+# Não cria duplicatas
 ```
 
 ---
@@ -170,13 +248,39 @@ curl http://seu-zabbix-qua:8080
 ## 📱 Comandos Principais
 
 ```bash
-python3 analise_mapeamento.py             # Analisar mapeamento
-python3 validate.py                       # Validar config
-python3 sync_prometheus.py --list         # Ver hosts
-python3 sync_prometheus.py --all          # Sincronizar tudo
-python3 sync_prometheus.py --host X       # Sincronizar host X
+# Validar configuração
+python3 validate.py
+
+# Analisar mapeamento
+python3 analise_mapeamento.py
+
+# Listar hosts
+python3 sync_prometheus.py --list
+
+# Sincronizar tudo
+python3 sync_prometheus.py --all
+
+# Sincronizar host específico
+python3 sync_prometheus.py --host seu-host
+
+# Com detalhes
+python3 sync_prometheus.py --all --verbose
 ```
 
 ---
 
-**GitHub:** https://github.com/carlossantosgit/lab-zal | **Status:** Production Ready
+## ✅ Checklist de Deployment
+
+- [ ] Criar `.env` com credenciais (ou editar `config.py`)
+- [ ] Instalar dependências: `pip install -r requirements.txt`
+- [ ] Executar validação: `python3 validate.py` ✅
+- [ ] Analisar mapeamento: `python3 analise_mapeamento.py`
+- [ ] Criar `MAPPING_PROMETHEUS_ZABBIX.md`
+- [ ] Testar sincronização em um host: `python3 sync_prometheus.py --host test-host`
+- [ ] Se OK, sincronizar todos: `python3 sync_prometheus.py --all`
+- [ ] Configurar cron para automação
+- [ ] Monitorar logs: `tail -f /var/log/prometheus-zabbix-sync.log`
+
+---
+
+**GitHub:** https://github.com/carlossantosgit/lab-zal | **Status:** Production Ready ✅
