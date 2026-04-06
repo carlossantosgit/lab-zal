@@ -3,35 +3,30 @@ Configuração de Produção
 Ajuste estes valores conforme seu ambiente
 """
 
-import os
-
 # ============================================================================
 # ZABBIX
 # ============================================================================
 
 # URL da API Zabbix
-ZABBIX_API_URL = os.getenv("ZABBIX_API_URL", "http://zabbix-server:8080/api_jsonrpc.php")
+ZABBIX_API_URL = "http://zabbix-server:8080/api_jsonrpc.php"
 
 # Credenciais Zabbix
-ZABBIX_USER = os.getenv("ZABBIX_USER", "Admin")
-ZABBIX_PASSWORD = os.getenv("ZABBIX_PASSWORD", "zabbix")
+ZABBIX_USER = "Admin"
+ZABBIX_PASSWORD = "zabbix"
 
 # ============================================================================
 # PROMETHEUS
 # ============================================================================
 
 # URL da API Prometheus (PRODUÇÃO)
-PROMETHEUS_URL = os.getenv(
-    "PROMETHEUS_URL",
-    "https://prometheus-prod-srv01.spms.min-saude.pt"
-)
+PROMETHEUS_URL = "https://prometheus-prod-srv01.spms.min-saude.pt"
 
 # Credenciais Prometheus (HTTPS com autenticação básica)
-PROMETHEUS_USER = os.getenv("PROMETHEUS_USER", "prometheus")
-PROMETHEUS_PASS = os.getenv("PROMETHEUS_PASS", "")
+PROMETHEUS_USER = "prometheus"
+PROMETHEUS_PASS = "5FapePt9erAhCNdylnii8s6zr2957pRx1fNGTUUR"
 
 # Flag para verificação de SSL (em produção, deixar True)
-PROMETHEUS_VERIFY_SSL = os.getenv("PROMETHEUS_VERIFY_SSL", "False").lower() == "true"
+PROMETHEUS_VERIFY_SSL = False
 
 # ============================================================================
 # MAPEAMENTO DE SEVERIDADE
@@ -48,8 +43,8 @@ SEVERITY_MAP = {
 # LOGGING
 # ============================================================================
 
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-LOG_FILE = os.getenv("LOG_FILE", "/var/log/prometheus-zabbix-sync.log")
+LOG_LEVEL = "INFO"
+LOG_FILE = "/var/log/prometheus-zabbix-sync.log"
 
 # ============================================================================
 # VALIDAÇÃO DE CONFIGURAÇÃO
