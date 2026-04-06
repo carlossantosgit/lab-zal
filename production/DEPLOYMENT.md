@@ -1,41 +1,40 @@
-# 📋 Guia de Deployment - Production Ready
+# 📋 Deployment Production - Cópia Manual
 
-**Tempo estimado:** 10 minutos
+**Setup sem git clone - Copiar arquivos manualmente**
 
 ---
 
-## 1️⃣ Pré-requisitos
+## 📦 Arquivos para Copiar
 
-```bash
-# Verificar Python
-python3 --version  # ≥3.8
+**Total: 6 arquivos**
 
-# Server com acesso a:
-# - Prometheus HTTPS: prometheus-prod-srv01.spms.min-saude.pt
-# - Zabbix HTTP: seu-zabbix-qua:8080
+```
+✅ config.py
+✅ validate.py
+✅ sync_prometheus.py
+✅ requirements.txt
+✅ README.md
+✅ DEPLOYMENT.md
 ```
 
 ---
 
-## 2️⃣ Clonar e Setup
+## 🚀 PASSO 1: Copiar Arquivos
+
+**Para `/home/seu-usuario/prometheus-zabbix/`**
 
 ```bash
-# Clonar repo
-cd ~
-git clone https://github.com/carlossantosgit/lab-zal.git
-cd lab-zal/production
+# Criar pasta
+mkdir -p /home/seu-usuario/prometheus-zabbix
+cd /home/seu-usuario/prometheus-zabbix
 
-# Criar environment virtual
-python3 -m venv venv
-source venv/bin/activate
-
-# Instalar dependências
-pip install -r requirements.txt
+# Copiar os 6 arquivos aquela
+# (scp, wget, cat > file, etc.)
 ```
 
 ---
 
-## 3️⃣ Configurar (OBRIGATÓRIO)
+## ⚙️ PASSO 2: Editar config.py (CRÍTICO)
 
 ```bash
 nano config.py
@@ -44,27 +43,44 @@ nano config.py
 **Alterar APENAS estes 6 valores:**
 
 ```python
-# PROMETHEUS (seu servidor)
-PROMETHEUS_URL = "https://prometheus-prod-srv01.spms.min-saude.pt"
-PROMETHEUS_USER = "prometheus"
-PROMETHEUS_PASS = "sua-senha-aqui"
+PROMETHEUS_URL = "https://seu-prometheus"
+PROMETHEUS_USER = "seu-usuario"
+PROMETHEUS_PASS = "sua-senha"
 
-# ZABBIX (seu servidor)
 ZABBIX_API_URL = "http://seu-zabbix:8080/api_jsonrpc.php"
 ZABBIX_USER = "Admin"
-ZABBIX_PASSWORD = "sua-senha-aqui"
+ZABBIX_PASSWORD = "sua-senha"
+```
+
+**SEM .env - tudo hardcoded em config.py**
+
+---
+
+## 🐍 PASSO 3: Setup Python
+
+```bash
+# Verificar Python
+python3 --version  # Precisa ≥3.8
+
+# Criar venv
+python3 -m venv venv
+
+# Ativar
+source venv/bin/activate
+
+# Instalar dependências
+pip install -r requirements.txt
 ```
 
 ---
 
-## 4️⃣ Validar (CRÍTICO)
+## ✅ PASSO 4: Validar
 
 ```bash
 python3 validate.py
 ```
 
-**Se vir isto → SUCESSO ✅**
-
+**Esperado:**
 ```
 ✅ Prometheus OK
 ✅ Zabbix OK (login bem-sucedido)
@@ -73,65 +89,58 @@ python3 validate.py
 ✅ VALIDAÇÃO OK - Sistema pronto para sincronização!
 ```
 
-**Se falhar:**
-- Verificar URLs
-- Verificar credenciais
-- Verificar firewall/conectividade
-- Verificar SSL (se HTTPS)
+**Se falhar:** revisar `config.py` (URLs e credenciais)
 
 ---
 
-## 5️⃣ Analisar Mapeamento
+## 🔄 PASSO 5: Sincronizar
 
 ```bash
-python3 analise_mapeamento.py
-```
+# Ver hosts
+python3 sync_prometheus.py --list
 
-Revisar a saída e confirmar que os hosts/labels estão corretos.
-
----
-
-## 6️⃣ Sincronizar
-
-### Opção A: Teste (1 host)
-
-```bash
-python3 sync_prometheus.py --host seu-host-teste
-```
-
-### Opção B: Produção (todos)
-
-```bash
+# Sincronizar TODOS
 python3 sync_prometheus.py --all
+
+# Sincronizar 1 host
+python3 sync_prometheus.py --host seu-host
+
+# Com detalhes
+python3 sync_prometheus.py --all --verbose
 ```
 
 ---
 
-## 7️⃣ Automação (Cron)
+## ⏰ PASSO 6: Automação (Cron)
 
 ```bash
 crontab -e
 ```
 
-Adicionar (sincroniza cada hora):
-
+Adicionar:
 ```bash
-0 * * * * cd /home/usuario/lab-zal/production && source venv/bin/activate && python3 sync_prometheus.py --all >> /var/log/prometheus-zabbix-sync.log 2>&1
+0 * * * * cd /home/seu-usuario/prometheus-zabbix && source venv/bin/activate && python3 sync_prometheus.py --all >> /var/log/prometheus-zabbix-sync.log 2>&1
 ```
 
 ---
 
-## 📋 Comandos de Monitoramento
+## 📋 Comandos Principais
 
 ```bash
-# Ver logs em tempo real
-tail -f /var/log/prometheus-zabbix-sync.log
+# Sempre que abrir terminal
+source venv/bin/activate
 
-# Ver status de sincronização
+# Validar
+python3 validate.py
+
+# Listar hosts
 python3 sync_prometheus.py --list
 
-# Ver detalhes completos
-python3 sync_prometheus.py --all --verbose
+# Sincronizar
+python3 sync_prometheus.py --all
+
+# Ver logs
+tail -f /var/log/prometheus-zabbix-sync.log
 ```
 
 ---
@@ -140,19 +149,31 @@ python3 sync_prometheus.py --all --verbose
 
 | ❌ ERRADO | ✅ CERTO |
 |-----------|---------|
-| Esquecer de validar | `python3 validate.py` primeiro |
-| Usar .env | Editar `config.py` hardcoded |
-| Editar `/api_jsonrpc` | Deixar URL completa |
-| Esquecer venv | Sempre `source venv/bin/activate` |
+| Usar .env | Editar `config.py` |
+| Esquecer venv | `source venv/bin/activate` |
+| Sem validar | `python3 validate.py` primeiro |
+| Credenciais de exemplo | Alterar config.py com valores REAIS |
 
 ---
 
-## 🆘 Se Algo Falhar
+## 🆘 Troubleshooting
 
-1. **Validação falha** → Revisar `config.py` (credenciais/URLs)
-2. **Sincronização falha** → Verificar logs, rodar `python3 validate.py` novamente
-3. **Cron não funciona** → Testar comando manualmente primeiro
+### "Prometheus não acessível"
+- Verificar `PROMETHEUS_URL` em config.py
+- Testrar: `curl -k -u user:pass https://url/-/healthy`
+
+### "Zabbix não acessível"
+- Verificar `ZABBIX_API_URL` em config.py
+- Testrar: `curl http://seu-zabbix:8080`
+
+### "Login falhou"
+- Revisar `ZABBIX_USER` e `ZABBIX_PASSWORD`
+
+### "requests não instalado"
+- `source venv/bin/activate`
+- `pip install -r requirements.txt`
 
 ---
 
-**Pronto para produção! 🚀**
+**Pronto!** 🚀
+

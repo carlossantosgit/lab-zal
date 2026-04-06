@@ -1,76 +1,65 @@
-# 🚀 Sincronização Prometheus → Zabbix (PRODUÇÃO)
+# 🚀 Sincronização Prometheus → Zabbix
 
-Sistema Python para sincronizar alerting rules do Prometheus com Zabbix.
+Setup manual - Copiar 6 arquivos e rodar.
 
----
-
-## 📦 Arquivos
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `config.py` | ⚙️ Configuração (editar credenciais aqui) |
-| `validate.py` | ✅ Validação de conectividade |
-| `sync_prometheus.py` | ⭐ Script principal de sincronização |
-| `requirements.txt` | 📦 Dependências Python |
-| `README.md` | Este arquivo |
-| `DEPLOYMENT.md` | 🚀 Guia de deployment |
+**SEM git, SEM .env - Tudo hardcoded em config.py**
 
 ---
 
-## ⚡ Quick Start
+## 📦 Arquivos (6 apenas)
 
-### 1. Setup
+```
+config.py              ← Editar credenciais aqui
+validate.py            ← Validar conexão
+sync_prometheus.py     ← Sincronizar
+requirements.txt       ← Dependências
+README.md              ← Este arquivo
+DEPLOYMENT.md          ← Guia de deployment
+```
+
+---
+
+## ⚡ Resumo (10 min)
+
 ```bash
+# 1. Copiar os 6 arquivos para /home/usuario/prometheus-zabbix/
+
+# 2. Editar config.py
+cd /home/usuario/prometheus-zabbix
+nano config.py
+# Alterar: PROMETHEUS_URL, PROMETHEUS_USER, PROMETHEUS_PASS, ZABBIX_API_URL, ZABBIX_USER, ZABBIX_PASSWORD
+
+# 3. Setup
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-```
 
-### 2. Configurar
-```bash
-nano config.py  # Editar credenciais
-```
-
-### 3. Validar
-```bash
+# 4. Validar
 python3 validate.py
-```
+# Esperado: ✅ VALIDAÇÃO OK
 
-**Esperado:**
-```
-✅ Prometheus OK
-✅ Zabbix OK
-✅ XX alerting rules encontradas
-✅ X hosts encontrados em Zabbix
-✅ VALIDAÇÃO OK - Sistema pronto para sincronização!
-```
-
-### 4. Sincronizar
-```bash
-# Ver hosts
-python3 sync_prometheus.py --list
-
-# Sincronizar todos
+# 5. Sincronizar
 python3 sync_prometheus.py --all
 
-# Sincronizar host específico
-python3 sync_prometheus.py --host seu-host
+# 6. Automação (opcional)
+crontab -e
+# Adicionar: 0 * * * * cd /home/usuario/prometheus-zabbix && source venv/bin/activate && python3 sync_prometheus.py --all >> /var/log/prometheus-zabbix-sync.log 2>&1
 ```
 
 ---
 
 ## 🔧 Configuração (config.py)
 
-Editar apenas estes 6 valores:
+**6 linhas para editar:**
 
 ```python
-PROMETHEUS_URL = "https://seu-prometheus"
-PROMETHEUS_USER = "usuario"
-PROMETHEUS_PASS = "senha"
+PROMETHEUS_URL = "https://seu-prometheus"   ← EDITAR
+PROMETHEUS_USER = "usuario"                  ← EDITAR
+PROMETHEUS_PASS = "senha"                    ← EDITAR
 
-ZABBIX_API_URL = "http://seu-zabbix:8080/api_jsonrpc.php"
-ZABBIX_USER = "Admin"
-ZABBIX_PASSWORD = "senha"
+ZABBIX_API_URL = "http://seu-zabbix:8080/api_jsonrpc.php"  ← EDITAR
+ZABBIX_USER = "Admin"                        ← EDITAR
+ZABBIX_PASSWORD = "senha"                    ← EDITAR
 ```
 
 ---
@@ -78,25 +67,41 @@ ZABBIX_PASSWORD = "senha"
 ## 📋 Comandos
 
 ```bash
-python3 validate.py                    # Validar conectividade
-python3 sync_prometheus.py --list      # Listar hosts
-python3 sync_prometheus.py --all       # Sincronizar tudo
-python3 sync_prometheus.py --host xxx  # Sincronizar host X
-python3 sync_prometheus.py --all -v    # Com detalhes
+# Ativar venv (sempre primeiro)
+source venv/bin/activate
+
+# Validar
+python3 validate.py
+
+# Listar hosts
+python3 sync_prometheus.py --list
+
+# Sincronizar tudo
+python3 sync_prometheus.py --all
+
+# Sincronizar 1 host
+python3 sync_prometheus.py --host seu-host
+
+# Com detalhes
+python3 sync_prometheus.py --all --verbose
+
+# Ver logs
+tail -f /var/log/prometheus-zabbix-sync.log
 ```
 
 ---
 
-## ⏰ Automação (Cron)
+## ⚠️ IMPORTANTE
 
-```bash
-crontab -e
-
-# Adicionar (sincroniza cada hora):
-0 * * * * cd /home/usuario/production && source venv/bin/activate && python3 sync_prometheus.py --all >> /var/log/prometheus-zabbix-sync.log 2>&1
-```
+| ❌ ERRADO | ✅ CERTO |
+|-----------|---------|
+| Usar .env | Editar config.py |
+| Esquecer venv | `source venv/bin/activate` |
+| Sem validar | `python3 validate.py` sempre |
+| Valores de exemplo | Colocar valores REAIS |
 
 ---
 
-**Para deployment, ver: `DEPLOYMENT.md`**
+**Para detalhes:** Ver `DEPLOYMENT.md`
+
 
