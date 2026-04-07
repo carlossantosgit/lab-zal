@@ -4,8 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
-venv/
 *.egg-info/
 dist/
 build/
@@ -15,31 +13,36 @@ build/
 .idea/
 *.swp
 *.swo
-*~
-.DS_Store
 
-# Docker
+# Environment
 .env
 .env.local
-
-# Zabbix
-zabbix_data/
-zabbix_backups/
-
-# Logs
 *.log
-logs/
-
-# Temporary
-*.tmp
-*.bak
-temp/
-.temp/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Keep these
-!webhook/Dockerfile
-!zal/Dockerfile
+# Backups
+*.bak
+*.bak*
+*_ascii.py
+
+# Temporary
+*.tmp
+*.temp
+
+# Lab-specific files (keep folder roots)
+.claude/
+Lab-IA-ZABBIX/
+
+# Root lab-zal artifacts - keep only production/
+lab-zal/.gitignore
+lab-zal/alertmanager/
+lab-zal/prometheus/
+lab-zal/scripts/
+lab-zal/webhook/
+lab-zal/zal/
+lab-zal/*.md
+lab-zal/*.sh
+lab-zal/docker-compose.yml
