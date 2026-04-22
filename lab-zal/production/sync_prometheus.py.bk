@@ -13,10 +13,15 @@ import time
 import ssl
 import json
 import re
+import hashlib
 import argparse
 import socket
 import struct
+import subprocess
+import tempfile
+import os
 import requests
+from collections import defaultdict
 
 from config import (
     logger,
@@ -50,13 +55,6 @@ SEVERITY_THRESHOLD = {
     "critical":  5,
     "emergency": 6,
     "page":      6,
-}
-
-VALUE_TYPE = {
-    "status":   3,  # Numeric unsigned
-    "severity": 3,  # Numeric unsigned
-    "summary":  1,  # Character (max 255)
-    "payload":  4,  # Text
 }
 
 META_LABELS = frozenset([
@@ -361,7 +359,7 @@ class PrometheusSync:
                         "key_": key_str,
                         "name": "%s (%s) - %s" % (alertname, instance, item_type),
                         "type": 2,  # Trapper
-                        "value_type": VALUE_TYPE[item_type],
+                        "value_type": 3,  # Numeric (unsigned)
                         "description": "%s [%s]" % (summary, item_type),
                     }
 
@@ -594,52 +592,49 @@ class PrometheusSync:
             return 1
 
     def _send_trapper_data(self, data):
-        """Envia dados via protocolo Zabbix Trapper (TCP socket + JSON)"""
+        """Envia dados via zabbix_sender"""
         if not data:
             return 0
 
-        payload = {
-            "request": "sender data",
-            "data": [
-                {
-                    "host": d["host"],
-                    "key": d["key"],
-                    "value": str(d["value"]),
-                    "clock": d["clock"],
-                }
-                for d in data
-            ],
-        }
+        # Build input file
+        lines = []
+        for d in data:
+            lines.append("%s %s %s %s" % (
+                d["host"], d["key"], d["clock"], d["value"]))
 
-        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-        header = b"ZBXD\x01" + struct.pack("<Q", len(body))
-
-        logger.info("Zabbix Trapper: %s:%s (%d valores)",
-                    ZABBIX_SERVER, ZABBIX_TRAPPER_PORT, len(data))
+        tmp = tempfile.NamedTemporaryFile(
+            mode='w', suffix='.txt', delete=False, prefix='zbx_')
+        tmp.write("\n".join(lines) + "\n")
+        tmp.close()
 
         try:
-            with socket.create_connection(
-                    (ZABBIX_SERVER, int(ZABBIX_TRAPPER_PORT)), timeout=30) as sock:
-                sock.sendall(header + body)
+            cmd = [
+                "zabbix_sender",
+                "-z", ZABBIX_SERVER,
+                "-p", ZABBIX_TRAPPER_PORT,
+                "-i", tmp.name, "-T"
+            ]
 
-                resp_header = sock.recv(13)
-                if len(resp_header) < 13 or resp_header[:5] != b"ZBXD\x01":
-                    logger.warning("Resposta inesperada do Zabbix Trapper")
-                    return 0
+            logger.info("zabbix_sender: %s:%s", ZABBIX_SERVER, ZABBIX_TRAPPER_PORT)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=120)
 
-                resp_len = struct.unpack("<Q", resp_header[5:13])[0]
-                resp_body = sock.recv(resp_len).decode("utf-8")
-                resp = json.loads(resp_body)
+            if result.stdout:
+                logger.info("  %s", result.stdout.strip())
+            if result.returncode != 0 and result.stderr:
+                logger.warning("  stderr: %s", result.stderr.strip())
 
-                info = resp.get("info", "")
-                logger.info("Trapper resposta: %s", info)
-
-                m = re.search(r"processed:\s*(\d+)", info)
-                return int(m.group(1)) if m else 0
+            return len(data) if result.returncode == 0 else 0
 
         except Exception as e:
-            logger.error("Erro com Zabbix Trapper: %s", e)
+            logger.error("Erro com zabbix_sender: %s", e)
             return 0
+
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
 
 
 # ===========================================================================
