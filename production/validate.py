@@ -6,19 +6,19 @@ Valida que sincronização está funcionando
 
 import requests
 import sys
-import logging
+
+# Importar logging do config (já configurado automaticamente)
 from config import (
+    logger,
     ZABBIX_API_URL,
     ZABBIX_USER,
     ZABBIX_PASSWORD,
+    ZABBIX_VERIFY_SSL,
     PROMETHEUS_URL,
     PROMETHEUS_USER,
     PROMETHEUS_PASS,
     PROMETHEUS_VERIFY_SSL
 )
-
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-logger = logging.getLogger(__name__)
 
 
 def validate():
@@ -54,7 +54,7 @@ def validate():
             "params": {"user": ZABBIX_USER, "password": ZABBIX_PASSWORD},
             "id": 1
         }
-        resp = requests.post(ZABBIX_API_URL, json=payload, timeout=5)
+        resp = requests.post(ZABBIX_API_URL, json=payload, verify=ZABBIX_VERIFY_SSL, timeout=5)
         result = resp.json()
 
         if "result" in result:
@@ -100,7 +100,7 @@ def validate():
             "auth": token,
             "id": 1
         }
-        resp = requests.post(ZABBIX_API_URL, json=payload, timeout=5)
+        resp = requests.post(ZABBIX_API_URL, json=payload, verify=ZABBIX_VERIFY_SSL, timeout=5)
         result = resp.json()
 
         if "result" in result:

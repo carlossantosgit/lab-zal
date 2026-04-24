@@ -1,89 +1,90 @@
-# 🚀 Sincronização Prometheus → Zabbix
+# Sincronização Prometheus → Zabbix
 
-Setup manual - Copiar 6 arquivos e rodar.
+Sincroniza alertas ativos do Prometheus para o Zabbix usando um host único com items parametrizados, enviando valores via Zabbix Trapper.
 
-**SEM git, SEM .env - Tudo hardcoded em config.py**
+**Sem git, sem .env — configuração hardcoded em `config.py`**
 
 ---
 
-## 📦 Arquivos (6 apenas)
+## Arquivos
 
 ```
 config.py              ← Editar credenciais aqui
-validate.py            ← Validar conexão
-sync_prometheus.py     ← Sincronizar
-requirements.txt       ← Dependências
+validate.py            ← Validar conectividade
+sync_prometheus.py     ← Script principal
+requirements.txt       ← Dependências Python
 README.md              ← Este arquivo
-DEPLOYMENT.md          ← Guia de deployment
+DEPLOYMENT.md          ← Guia de deployment detalhado
+SYNC_GUIDE.md          ← Guia operacional completo
+sync_prometheus.py.bk  ← Backup do script
 ```
 
 ---
 
-## ⚡ Resumo (10 min)
+## Setup Rápido (10 min)
 
 ```bash
-# 1. Copiar os 6 arquivos para /home/usuario/prometheus-zabbix/
-
-# 2. Editar config.py
+# 1. Copiar arquivos para /home/usuario/prometheus-zabbix/
 cd /home/usuario/prometheus-zabbix
-nano config.py
-# Alterar: PROMETHEUS_URL, PROMETHEUS_USER, PROMETHEUS_PASS, ZABBIX_API_URL, ZABBIX_USER, ZABBIX_PASSWORD
 
-# 3. Setup
+# 2. Editar credenciais
+nano config.py
+
+# 3. Criar ambiente virtual e instalar dependências
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# 4. Validar
+# 4. Validar conectividade
 python3 validate.py
-# Esperado: ✅ VALIDAÇÃO OK
 
-# 5. Sincronizar
+# 5. Sincronizar (cria host + items + triggers)
 python3 sync_prometheus.py --all
 
-# 6. Automação (opcional)
-crontab -e
-# Adicionar: 0 * * * * cd /home/usuario/prometheus-zabbix && source venv/bin/activate && python3 sync_prometheus.py --all >> /var/log/prometheus-zabbix-sync.log 2>&1
+# 6. Enviar valores dos alertas ativos
+python3 sync_prometheus.py --push
 ```
 
 ---
 
-## 🔧 Configuração (config.py)
-
-**6 linhas para editar:**
+## Configuração (config.py)
 
 ```python
-PROMETHEUS_URL = "https://seu-prometheus"   ← EDITAR
-PROMETHEUS_USER = "usuario"                  ← EDITAR
-PROMETHEUS_PASS = "senha"                    ← EDITAR
+# Zabbix
+ZABBIX_API_URL  = "https://seu-zabbix/api_jsonrpc.php"
+ZABBIX_USER     = "api"
+ZABBIX_PASSWORD = "sua-senha"
 
-ZABBIX_API_URL = "http://seu-zabbix:8080/api_jsonrpc.php"  ← EDITAR
-ZABBIX_USER = "Admin"                        ← EDITAR
-ZABBIX_PASSWORD = "senha"                    ← EDITAR
+# Prometheus
+PROMETHEUS_URL  = "https://seu-prometheus"
+PROMETHEUS_USER = "usuario"
+PROMETHEUS_PASS = "sua-senha"
+
+# Zabbix Trapper (em sync_prometheus.py)
+ZABBIX_SERVER        = "IP-do-servidor-zabbix"
+ZABBIX_TRAPPER_PORT  = "10151"
 ```
 
 ---
 
-## 📋 Comandos
+## Comandos
 
 ```bash
 # Ativar venv (sempre primeiro)
 source venv/bin/activate
 
-# Validar
+# Validar conectividade
 python3 validate.py
 
-# Listar hosts
-python3 sync_prometheus.py --list
-
-# Sincronizar tudo
+# Sincronizar: cria host único + items + triggers
 python3 sync_prometheus.py --all
 
-# Sincronizar 1 host
-python3 sync_prometheus.py --host seu-host
+# Enviar alertas ativos para items via Zabbix Trapper
+python3 sync_prometheus.py --push
 
-# Com detalhes
+# Modo verbose
 python3 sync_prometheus.py --all --verbose
+python3 sync_prometheus.py --push --verbose
 
 # Ver logs
 tail -f /var/log/prometheus-zabbix-sync.log
@@ -91,17 +92,35 @@ tail -f /var/log/prometheus-zabbix-sync.log
 
 ---
 
-## ⚠️ IMPORTANTE
+## Arquitetura (Novo Modelo)
 
-| ❌ ERRADO | ✅ CERTO |
-|-----------|---------|
-| Usar .env | Editar config.py |
-| Esquecer venv | `source venv/bin/activate` |
-| Sem validar | `python3 validate.py` sempre |
-| Valores de exemplo | Colocar valores REAIS |
+- **1 host único** chamado `prometheus` no Zabbix
+- **Items parametrizados** por alerta e instância:
+  ```
+  prom.alert.status[alertname,instance]
+  prom.alert.severity[alertname,instance]
+  prom.alert.summary[alertname,instance]
+  prom.alert.payload[alertname,instance]
+  ```
+- **Triggers** com expressão baseada no `status` e tags dos labels do Prometheus
+- **Push** via protocolo Zabbix Trapper (TCP socket direto)
 
 ---
 
-**Para detalhes:** Ver `DEPLOYMENT.md`
+## Automação (Cron)
 
+```bash
+crontab -e
+```
 
+```
+# Sincronizar estrutura a cada hora
+0 * * * * cd /home/usuario/prometheus-zabbix && source venv/bin/activate && python3 sync_prometheus.py --all >> /var/log/prometheus-zabbix-sync.log 2>&1
+
+# Enviar valores a cada 5 minutos
+*/5 * * * * cd /home/usuario/prometheus-zabbix && source venv/bin/activate && python3 sync_prometheus.py --push >> /var/log/prometheus-zabbix-sync.log 2>&1
+```
+
+---
+
+**Para detalhes:** ver `DEPLOYMENT.md` e `SYNC_GUIDE.md`
