@@ -100,13 +100,13 @@ def hostname_from_instance(instance):
     return instance.split(":")[0] if ":" in instance else instance
 
 
-def extract_labels_as_tags(labels):
-    """Extrai labels (exceto META_LABELS) como tags para triggers"""
-    tags = {}
-    for k, v in labels.items():
-        if k not in META_LABELS and v:
-            tags[k] = str(v)[:255]  # Zabbix tag max 255 chars
-    return tags
+def build_prometheus_label_tags(labels):
+    """Monta as 3 tags padrao das labels Prometheus para triggers."""
+    return [
+        {"tag": "prometheus_service", "value": str(labels.get("service", ""))[:255]},
+        {"tag": "prometheus_type", "value": str(labels.get("type", ""))[:255]},
+        {"tag": "prometheus_apps", "value": str(labels.get("apps", ""))[:255]},
+    ]
 
 
 # ===========================================================================
@@ -261,6 +261,21 @@ class PrometheusSync:
             logger.warning("Batch trigger.create erro: %s", e)
             return 0
 
+    def update_trigger_tags(self, triggers_list):
+        """Atualiza tags de triggers existentes usando o triggerid no payload."""
+        updated = 0
+        for trig in triggers_list:
+            try:
+                self._zabbix_call("trigger.update", {
+                    "triggerid": trig["triggerid"],
+                    "tags": trig["tags"],
+                })
+                updated += 1
+            except RuntimeError as e:
+                logger.warning("trigger.update tags erro (%s): %s",
+                               trig.get("triggerid"), e)
+        return updated
+
     # -----------------------------------------------------------------------
     # Prometheus API
     # -----------------------------------------------------------------------
@@ -402,7 +417,6 @@ class PrometheusSync:
             # Pegar info da regra
             rule_info = rules.get(alertname, {})
             summary = rule_info.get("summary", alertname)
-            labels = rule_info.get("labels", {}) or {}
 
             # Substituir macros {$labels.*} no summary pelo valor real
             def macro_replace(text, labels_dict):
@@ -415,8 +429,8 @@ class PrometheusSync:
             first_labels = alerts_list[0].get("labels", {}) if alerts_list else {}
             summary_final = macro_replace(summary, first_labels)
 
-            # Extract labels como tags
-            tags = extract_labels_as_tags(labels)
+            # Tags padrao a partir das labels reais do alerta activo
+            tags = build_prometheus_label_tags(first_labels)
 
             # Expressao baseada no status item
             item_key = "prom.alert.status[%s,%s]" % (alert_key_safe, instance_safe)
@@ -432,7 +446,7 @@ class PrometheusSync:
                 "expression": expr,
                 "priority": PRIORITY_MAP.get(severity, 2),
                 "type": 0,
-                "tags": [{"tag": k, "value": v} for k, v in tags.items()],
+                "tags": tags,
             }
 
         logger.info("Build plan: %d triggers", len(plan))
@@ -491,6 +505,14 @@ class PrometheusSync:
                 t for t in triggers_plan
                 if t["expression"] not in existing_trigs
             ]
+            existing_triggers_for_update = [
+                {
+                    "triggerid": existing_trigs[t["expression"]],
+                    "tags": t["tags"],
+                }
+                for t in triggers_plan
+                if t["expression"] in existing_trigs
+            ]
 
             # 6. Criar items
             ci = self.batch_create_items(new_items_for_api)
@@ -500,10 +522,15 @@ class PrometheusSync:
             ct = self.batch_create_triggers(new_triggers)
             logger.info("Triggers criadas: %d", ct)
 
+            # 8. Atualizar tags das triggers ja existentes
+            ut = self.update_trigger_tags(existing_triggers_for_update)
+            logger.info("Triggers existentes atualizadas com tags: %d", ut)
+
             logger.info("=" * 70)
             logger.info("SYNC COMPLETO")
             logger.info("  Items: %d (novos: +%d)", len(items_plan), ci)
-            logger.info("  Triggers: %d (novas: +%d)", len(triggers_plan), ct)
+            logger.info("  Triggers: %d (novas: +%d, atualizadas: %d)",
+                        len(triggers_plan), ct, ut)
             logger.info("=" * 70)
 
             return 0
