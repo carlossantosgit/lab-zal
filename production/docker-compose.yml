@@ -5,11 +5,7 @@ services:
     container_name: prometheus-zabbix-sync
     restart: unless-stopped
 
-    env_file:
-      - .env
-
     environment:
-      # Intervalos (sobrepõe o que vier do .env se necessário)
       SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-5}
       PUSH_INTERVAL_MINUTES: ${PUSH_INTERVAL_MINUTES:-1}
 

@@ -61,38 +61,29 @@ docker compose logs -f
 
 ## Outro Ambiente (Prod, Staging, etc.)
 
-Para sobrepor qualquer configuração cria um ficheiro `.env` na pasta `production/`:
+Para sobrepor credenciais ou intervalos, exporta as variáveis antes de arrancar:
 
 ```bash
-cp .env.example .env
-vi .env
+export ZABBIX_API_URL=https://zabbix-prod.empresa.pt/api_jsonrpc.php
+export ZABBIX_PASSWORD=password_producao
+export PROMETHEUS_URL=https://prometheus-prod.empresa.pt
+export PROMETHEUS_PASS=password_producao
+
+docker compose up -d --build
 ```
 
-Exemplo de `.env` para produção:
+Ou cria um `.env` na pasta `production/` e o docker compose carrega-o automaticamente:
 
 ```env
 ZABBIX_API_URL=https://zabbix-prod.empresa.pt/api_jsonrpc.php
-ZABBIX_USER=api
 ZABBIX_PASSWORD=password_producao
-ZABBIX_VERIFY_SSL=true
-
 PROMETHEUS_URL=https://prometheus-prod.empresa.pt
-PROMETHEUS_USER=prometheus
 PROMETHEUS_PASS=password_producao
-PROMETHEUS_VERIFY_SSL=true
-
-SYNC_INTERVAL_MINUTES=5
-PUSH_INTERVAL_MINUTES=1
-LOG_LEVEL=INFO
 ```
-
-Depois arrancar normalmente:
 
 ```bash
 docker compose up -d --build
 ```
-
-> O `docker compose` carrega automaticamente o `.env` se existir na mesma pasta.
 
 ---
 
