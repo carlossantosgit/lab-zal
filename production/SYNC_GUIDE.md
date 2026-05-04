@@ -88,38 +88,36 @@ python3 sync_prometheus.py --push --verbose
 
 ## Workflow Recomendado
 
-```bash
-cd /home/seu-usuario/prometheus-zabbix
-source venv/bin/activate
+O container executa o ciclo automaticamente via `scheduler.py`.  
+Para execução manual dentro do container:
 
+```bash
 # 1. Validar conectividade
-python3 validate.py
+docker compose exec prometheus-zabbix-sync python validate.py
 
 # 2. Sincronizar estrutura (cria host, items e triggers)
-python3 sync_prometheus.py --all
+docker compose exec prometheus-zabbix-sync python sync_prometheus.py --all
 
 # 3. Enviar valores atuais dos alertas
-python3 sync_prometheus.py --push
+docker compose exec prometheus-zabbix-sync python sync_prometheus.py --push
 
-# 4. Verificar logs
-tail -100 /var/log/prometheus-zabbix-sync.log
+# 4. Ver logs
+docker compose logs --tail=100
 ```
 
 ---
 
-## Automação com Cron
+## Automação
 
-```bash
-crontab -e
-```
+O `scheduler.py` corre dentro do container e executa:
 
-```bash
-# Sincronizar estrutura a cada hora (garante novos alertas registados)
-0 * * * * cd /home/seu-usuario/prometheus-zabbix && source venv/bin/activate && python3 sync_prometheus.py --all >> /var/log/prometheus-zabbix-sync.log 2>&1
+| Comando | Intervalo | Propósito |
+|---|---|---|
+| `--all` | 5 minutos (configurável via `SYNC_INTERVAL_MINUTES`) | Criar/actualizar items e triggers |
+| `--push` | 1 minuto (configurável via `PUSH_INTERVAL_MINUTES`) | Enviar valores dos alertas activos |
 
-# Enviar valores a cada 5 minutos
-*/5 * * * * cd /home/seu-usuario/prometheus-zabbix && source venv/bin/activate && python3 sync_prometheus.py --push >> /var/log/prometheus-zabbix-sync.log 2>&1
-```
+Ambos são executados também na inicialização do container.  
+Ver [CONTAINER_GUIDE.md](CONTAINER_GUIDE.md) para arranque e configuração.
 
 ---
 
@@ -253,6 +251,4 @@ curl -k -u user:pass https://seu-prometheus/-/healthy
 
 ## Suporte
 
-- Prometheus Admin: [preencher]
-- Zabbix Admin: [preencher]
-- On-Call: [preencher]
+Ver [DEPLOYMENT.md](DEPLOYMENT.md) para guia de deploy e troubleshooting operacional.

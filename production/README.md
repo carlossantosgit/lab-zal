@@ -2,97 +2,58 @@
 
 Sincroniza alertas ativos do Prometheus para o Zabbix usando um host único com items parametrizados, enviando valores via Zabbix Trapper.
 
-**Sem git, sem .env — configuração hardcoded em `config.py`**
+---
+
+## Ficheiros
+
+```
+production/
+├── Dockerfile              imagem base python:3.11-slim
+├── docker-compose.yml      definição do serviço
+├── scheduler.py            loop interno (--all cada 5 min, --push cada 1 min)
+├── config.py               credenciais via env vars (com defaults Dev)
+├── sync_prometheus.py      lógica principal
+├── validate.py             validação de conectividade
+├── requirements.txt        dependências Python
+├── .env.example            template para sobrepor configuração
+├── CONTAINER_GUIDE.md      guia completo de Docker
+└── SYNC_GUIDE.md           arquitetura e operação detalhada
+```
 
 ---
 
-## Arquivos
+## Arranque Rápido
 
-```
-config.py              ← Editar credenciais aqui
-validate.py            ← Validar conectividade
-sync_prometheus.py     ← Script principal
-requirements.txt       ← Dependências Python
-README.md              ← Este arquivo
-DEPLOYMENT.md          ← Guia de deployment detalhado
-SYNC_GUIDE.md          ← Guia operacional completo
-sync_prometheus.py.bk  ← Backup do script
-```
-
----
-
-## Setup Rápido (10 min)
+Não é necessário criar nenhum ficheiro de configuração — as credenciais Dev já estão nos defaults do `config.py`.
 
 ```bash
-# 1. Copiar arquivos para /home/usuario/prometheus-zabbix/
-cd /home/usuario/prometheus-zabbix
-
-# 2. Editar credenciais
-nano config.py
-
-# 3. Criar ambiente virtual e instalar dependências
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# 4. Validar conectividade
-python3 validate.py
-
-# 5. Sincronizar (cria host + items + triggers)
-python3 sync_prometheus.py --all
-
-# 6. Enviar valores dos alertas ativos
-python3 sync_prometheus.py --push
+cd production
+docker compose up -d --build
+docker compose logs -f
 ```
+
+Para outros ambientes (Prod, Staging) ver [CONTAINER_GUIDE.md](CONTAINER_GUIDE.md).
 
 ---
 
-## Configuração (config.py)
+## Comandos do Script
 
-```python
-# Zabbix
-ZABBIX_API_URL  = "https://seu-zabbix/api_jsonrpc.php"
-ZABBIX_USER     = "api"
-ZABBIX_PASSWORD = "sua-senha"
-
-# Prometheus
-PROMETHEUS_URL  = "https://seu-prometheus"
-PROMETHEUS_USER = "usuario"
-PROMETHEUS_PASS = "sua-senha"
-
-# Zabbix Trapper (em sync_prometheus.py)
-ZABBIX_SERVER        = "IP-do-servidor-zabbix"
-ZABBIX_TRAPPER_PORT  = "10151"
-```
-
----
-
-## Comandos
+O `sync_prometheus.py` pode ser executado manualmente dentro do container:
 
 ```bash
-# Ativar venv (sempre primeiro)
-source venv/bin/activate
+# Sincronizar estrutura (cria host, items, triggers) — idempotente
+docker compose exec prometheus-zabbix-sync python sync_prometheus.py --all
+
+# Enviar valores dos alertas ativos via Zabbix Trapper
+docker compose exec prometheus-zabbix-sync python sync_prometheus.py --push
 
 # Validar conectividade
-python3 validate.py
-
-# Sincronizar: cria host único + items + triggers
-python3 sync_prometheus.py --all
-
-# Enviar alertas ativos para items via Zabbix Trapper
-python3 sync_prometheus.py --push
-
-# Modo verbose
-python3 sync_prometheus.py --all --verbose
-python3 sync_prometheus.py --push --verbose
-
-# Ver logs
-tail -f /var/log/prometheus-zabbix-sync.log
+docker compose exec prometheus-zabbix-sync python validate.py
 ```
 
 ---
 
-## Arquitetura (Novo Modelo)
+## Arquitetura
 
 - **1 host único** chamado `prometheus` no Zabbix
 - **Items parametrizados** por alerta e instância:
@@ -103,24 +64,8 @@ tail -f /var/log/prometheus-zabbix-sync.log
   prom.alert.payload[alertname,instance]
   ```
 - **Triggers** com expressão baseada no `status` e tags dos labels do Prometheus
-- **Push** via protocolo Zabbix Trapper (TCP socket direto)
+- **Push** via protocolo Zabbix Trapper (TCP socket direto, sem `zabbix_sender`)
 
 ---
 
-## Automação (Cron)
-
-```bash
-crontab -e
-```
-
-```
-# Sincronizar estrutura a cada hora
-0 * * * * cd /home/usuario/prometheus-zabbix && source venv/bin/activate && python3 sync_prometheus.py --all >> /var/log/prometheus-zabbix-sync.log 2>&1
-
-# Enviar valores a cada 5 minutos
-*/5 * * * * cd /home/usuario/prometheus-zabbix && source venv/bin/activate && python3 sync_prometheus.py --push >> /var/log/prometheus-zabbix-sync.log 2>&1
-```
-
----
-
-**Para detalhes:** ver `DEPLOYMENT.md` e `SYNC_GUIDE.md`
+**Para detalhes:** ver [CONTAINER_GUIDE.md](CONTAINER_GUIDE.md) e [SYNC_GUIDE.md](SYNC_GUIDE.md)

@@ -22,6 +22,7 @@ production/
 ├── scheduler.py          loop interno com intervalos configuráveis
 ├── config.py             credenciais via env vars (com defaults para Dev)
 ├── sync_prometheus.py    lógica principal
+├── validate.py           validação de conectividade (Prometheus + Zabbix)
 ├── requirements.txt      dependências Python
 └── .env.example          template para sobrepor configuração
 ```
@@ -132,6 +133,9 @@ docker compose exec prometheus-zabbix-sync sh
 # Correr o sync manualmente dentro do container
 docker compose exec prometheus-zabbix-sync python sync_prometheus.py --all
 docker compose exec prometheus-zabbix-sync python sync_prometheus.py --push
+
+# Validar conectividade (Prometheus + Zabbix)
+docker compose exec prometheus-zabbix-sync python validate.py
 ```
 
 ---
