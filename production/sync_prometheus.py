@@ -211,13 +211,55 @@ class PrometheusSync:
         })
         return set(i["key_"] for i in items)
 
+    def _extract_key_from_expr(self, expr):
+        """Extrai (alertname_safe, instance_safe) de qualquer formato de expression.
+
+        Suporta formato antigo (dot): prom.alert.status[alertname.instance]
+        e formato novo (comma):       prom.alert.status[alertname,instance]
+        """
+        m = re.search(r'prom\.alert\.status\[([^\]]+)\]', expr)
+        if not m:
+            return None, None
+        params = m.group(1)
+        if "," in params:
+            parts = params.split(",", 1)
+            return parts[0], parts[1]
+        # Formato antigo: alertname.instance separados por primeiro ponto
+        dot_idx = params.find(".")
+        if dot_idx > 0:
+            return params[:dot_idx], params[dot_idx + 1:]
+        return params, ""
+
+    def _expr_to_lookup_key(self, expr):
+        """Normaliza expression para lookup independente do formato Zabbix.
+
+        Zabbix 5.0   : {host:key.last()}>=N  (espacos opcionais em torno de >=)
+        Zabbix >= 5.4 : last(/host/key)>=N
+        Retorna tupla (host, key, threshold) ou a string original como fallback.
+        """
+        e = expr.strip()
+        # Novo formato (5.4+): last(/host/key) >= N
+        m = re.match(r'last\(/([^/]+)/([^\)]+)\)\s*>=\s*(\d+)', e)
+        if m:
+            return (m.group(1), m.group(2), int(m.group(3)))
+        # Formato antigo (5.0): {host:key.last()} >= N
+        m = re.match(r'\{([^:]+):(.+?)\.last\(\)\}\s*>=\s*(\d+)', e)
+        if m:
+            return (m.group(1), m.group(2), int(m.group(3)))
+        return e
+
     def prefetch_triggers(self, hostid):
-        """Obtem todas as trigger expressions neste host"""
+        """Obtem triggers existentes indexadas por chave normalizada e raw."""
         trigs = self._zabbix_call("trigger.get", {
             "output": ["expression", "triggerid"],
             "hostids": hostid,
+            "expandExpression": "true",
         })
-        return {t["expression"]: t["triggerid"] for t in trigs}
+        result = {}
+        for t in trigs:
+            result[t["expression"]] = t["triggerid"]
+            result[self._expr_to_lookup_key(t["expression"])] = t["triggerid"]
+        return result
 
     def batch_create_items(self, items_list):
         """Cria multiplos items numa unica chamada"""
@@ -501,18 +543,60 @@ class PrometheusSync:
                 for i in new_items
             ]
 
-            new_triggers = [
-                t for t in triggers_plan
-                if t["expression"] not in existing_trigs
-            ]
-            existing_triggers_for_update = [
-                {
-                    "triggerid": existing_trigs[t["expression"]],
-                    "tags": t["tags"],
-                }
-                for t in triggers_plan
-                if t["expression"] in existing_trigs
-            ]
+            new_triggers = []
+            existing_triggers_for_update = []
+            handled_triggerids = set()
+            for t in triggers_plan:
+                lkey = self._expr_to_lookup_key(t["expression"])
+                tid = existing_trigs.get(lkey) or existing_trigs.get(t["expression"])
+                if tid:
+                    existing_triggers_for_update.append({"triggerid": tid, "tags": t["tags"]})
+                    handled_triggerids.add(tid)
+                else:
+                    new_triggers.append(t)
+
+            # Backfill: triggers existentes (qualquer formato) sem tags correspondentes.
+            # Constroi lookups: (1) por alerta activo, (2) por nome da regra Prometheus.
+            alert_lookup = {}    # (alertname_safe, instance_safe) -> labels
+            alert_by_name = {}   # alertname_safe -> labels (fallback sem instance)
+            for alert in active_alerts:
+                lbs = alert.get("labels", {})
+                aname = lbs.get("alertname", "")
+                inst = lbs.get("instance", "")
+                if not aname:
+                    continue
+                a_safe = sanitize_key_param(aname)
+                i_safe = sanitize_key_param(inst)
+                alert_lookup[(a_safe, i_safe)] = lbs
+                if a_safe not in alert_by_name:
+                    alert_by_name[a_safe] = lbs
+
+            # Fallback via labels da regra Prometheus (service/type/apps estao aqui)
+            rule_labels = {}  # alertname_safe -> rule labels
+            for rname, rinfo in rules.items():
+                a_safe = sanitize_key_param(rname)
+                if a_safe not in rule_labels:
+                    rule_labels[a_safe] = rinfo.get("labels", {})
+
+            for expr, triggerid in existing_trigs.items():
+                if not isinstance(expr, str):
+                    continue
+                if triggerid in handled_triggerids:
+                    continue
+                a_safe, i_safe = self._extract_key_from_expr(expr)
+                if not a_safe:
+                    continue
+                lbs = (alert_lookup.get((a_safe, i_safe))
+                       or alert_by_name.get(a_safe)
+                       or rule_labels.get(a_safe))
+                if lbs:
+                    existing_triggers_for_update.append({
+                        "triggerid": triggerid,
+                        "tags": build_prometheus_label_tags(lbs),
+                    })
+                    handled_triggerids.add(triggerid)
+            logger.info("Triggers para actualizar tags (total): %d",
+                        len(existing_triggers_for_update))
 
             # 6. Criar items
             ci = self.batch_create_items(new_items_for_api)
