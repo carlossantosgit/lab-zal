@@ -1,33 +1,30 @@
 """
 Configuração de Produção
-Valores lidos de variáveis de ambiente (com fallback para desenvolvimento local).
+Lê de variáveis de ambiente; usa os valores hardcoded como default.
+Para sobrepor num ambiente diferente basta criar um .env ou exportar as vars.
 """
 
 import logging
 import os
-from pathlib import Path
 import urllib3
 
 # ============================================================================
-# SETUP LOGGING
+# LOGGING
 # ============================================================================
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
-# Em container os logs vão para stdout; fora do container tenta /var/log/
-_log_handlers = [logging.StreamHandler()]
+_handlers = [logging.StreamHandler()]
 try:
-    log_dir = "/var/log"
-    if os.access(log_dir, os.W_OK):
-        LOG_FILE = os.path.join(log_dir, "prometheus-zabbix-sync.log")
-        _log_handlers.append(logging.FileHandler(LOG_FILE))
+    if os.access("/var/log", os.W_OK):
+        _handlers.append(logging.FileHandler("/var/log/prometheus-zabbix-sync.log"))
 except Exception:
     pass
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=_log_handlers,
+    handlers=_handlers,
 )
 logger = logging.getLogger(__name__)
 
@@ -41,9 +38,9 @@ logger.info("=" * 60)
 # ZABBIX
 # ============================================================================
 
-ZABBIX_API_URL  = os.getenv("ZABBIX_API_URL",  "https://zabbix-dev.spms.min-saude.pt:4443/api_jsonrpc.php")
-ZABBIX_USER     = os.getenv("ZABBIX_USER",     "api")
-ZABBIX_PASSWORD = os.getenv("ZABBIX_PASSWORD", "")
+ZABBIX_API_URL    = os.getenv("ZABBIX_API_URL",    "https://zabbix-dev.spms.min-saude.pt:4443/api_jsonrpc.php")
+ZABBIX_USER       = os.getenv("ZABBIX_USER",       "api")
+ZABBIX_PASSWORD   = os.getenv("ZABBIX_PASSWORD",   "12345678")
 ZABBIX_VERIFY_SSL = os.getenv("ZABBIX_VERIFY_SSL", "false").lower() == "true"
 
 # ============================================================================
@@ -52,7 +49,7 @@ ZABBIX_VERIFY_SSL = os.getenv("ZABBIX_VERIFY_SSL", "false").lower() == "true"
 
 PROMETHEUS_URL        = os.getenv("PROMETHEUS_URL",        "https://prometheus-prod-srv01.spms.min-saude.pt")
 PROMETHEUS_USER       = os.getenv("PROMETHEUS_USER",       "prometheus")
-PROMETHEUS_PASS       = os.getenv("PROMETHEUS_PASS",       "")
+PROMETHEUS_PASS       = os.getenv("PROMETHEUS_PASS",       "5FapePt9erAhCNdylnii8s6zr2957pRx1fNGTUUR")
 PROMETHEUS_VERIFY_SSL = os.getenv("PROMETHEUS_VERIFY_SSL", "false").lower() == "true"
 
 # ============================================================================
@@ -66,7 +63,7 @@ SEVERITY_MAP = {
 }
 
 # ============================================================================
-# VALIDAÇÃO DE CONFIGURAÇÃO
+# VALIDAÇÃO
 # ============================================================================
 
 def validate_config():
@@ -78,9 +75,7 @@ def validate_config():
         auth = (PROMETHEUS_USER, PROMETHEUS_PASS) if PROMETHEUS_PASS else None
         resp = requests.get(
             "%s/-/healthy" % PROMETHEUS_URL,
-            auth=auth,
-            verify=PROMETHEUS_VERIFY_SSL,
-            timeout=5,
+            auth=auth, verify=PROMETHEUS_VERIFY_SSL, timeout=5,
         )
         if resp.status_code == 200:
             logger.info("Prometheus OK")
@@ -92,14 +87,11 @@ def validate_config():
         return False
 
     try:
-        payload = {
-            "jsonrpc": "2.0",
-            "method": "user.login",
-            "params": {"user": ZABBIX_USER, "password": ZABBIX_PASSWORD},
-            "id": 1,
-        }
-        resp = requests.post(ZABBIX_API_URL, json=payload, timeout=5,
-                             verify=ZABBIX_VERIFY_SSL)
+        resp = requests.post(ZABBIX_API_URL, timeout=5, verify=ZABBIX_VERIFY_SSL,
+                             json={"jsonrpc": "2.0", "method": "user.login",
+                                   "params": {"user": ZABBIX_USER,
+                                              "password": ZABBIX_PASSWORD},
+                                   "id": 1})
         result = resp.json()
         if "result" in result:
             logger.info("Zabbix OK")
