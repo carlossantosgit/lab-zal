@@ -1,143 +1,106 @@
 """
 Configuração de Produção
-Ajuste estes valores conforme seu ambiente
+Lê de variáveis de ambiente; usa os valores hardcoded como default.
+Para sobrepor num ambiente diferente basta criar um .env ou exportar as vars.
 """
 
 import logging
 import os
-from pathlib import Path
 import urllib3
 
 # ============================================================================
-# SETUP LOGGING AUTOMÁTICO
+# LOGGING
 # ============================================================================
 
-LOG_FILE = "/var/log/prometheus-zabbix-sync.log"
-LOG_LEVEL = "INFO"
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
-# Tentar criar log em /var/log/, se falhar usa pasta local
+_handlers = [logging.StreamHandler()]
 try:
-    log_dir = "/var/log"
-    if not os.access(log_dir, os.W_OK):
-        log_dir = os.path.dirname(os.path.abspath(__file__))
-        LOG_FILE = os.path.join(log_dir, "prometheus-zabbix-sync.log")
+    if os.access("/var/log", os.W_OK):
+        _handlers.append(logging.FileHandler("/var/log/prometheus-zabbix-sync.log"))
 except Exception:
-    LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prometheus-zabbix-sync.log")
+    pass
 
-# Configurar logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(LOG_FILE),
-        logging.StreamHandler()
-    ]
+    level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=_handlers,
 )
 logger = logging.getLogger(__name__)
 
-# Suprimir avisos SSL de urllib3 (quando VERIFY_SSL = False)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Log de inicialização
 logger.info("=" * 60)
-logger.info("🚀 Configuração carregada - Production")
-logger.info(f"📝 Log file: {LOG_FILE}")
+logger.info("Configuracao carregada - Production")
 logger.info("=" * 60)
 
 # ============================================================================
 # ZABBIX
 # ============================================================================
 
-# URL da API Zabbix
-ZABBIX_API_URL = "https://zabbix-dev.spms.min-saude.pt:4443/api_jsonrpc.php"
-
-# Credenciais Zabbix
-ZABBIX_USER = "api"
-ZABBIX_PASSWORD = "12345678"
-
-# Flag para ignorar verificação de SSL (se usar HTTPS sem certificado válido)
-ZABBIX_VERIFY_SSL = False
+ZABBIX_API_URL    = os.getenv("ZABBIX_API_URL",    "https://zabbix-dev.spms.min-saude.pt:4443/api_jsonrpc.php")
+ZABBIX_USER       = os.getenv("ZABBIX_USER",       "api")
+ZABBIX_PASSWORD   = os.getenv("ZABBIX_PASSWORD",   "12345678")
+ZABBIX_VERIFY_SSL = os.getenv("ZABBIX_VERIFY_SSL", "false").lower() == "true"
 
 # ============================================================================
 # PROMETHEUS
 # ============================================================================
 
-# URL da API Prometheus (PRODUÇÃO)
-PROMETHEUS_URL = "https://prometheus-prod-srv01.spms.min-saude.pt"
-
-# Credenciais Prometheus (HTTPS com autenticação básica)
-PROMETHEUS_USER = "prometheus"
-PROMETHEUS_PASS = "5FapePt9erAhCNdylnii8s6zr2957pRx1fNGTUUR"
-
-# Flag para verificação de SSL (em produção, deixar True)
-PROMETHEUS_VERIFY_SSL = False
+PROMETHEUS_URL        = os.getenv("PROMETHEUS_URL",        "https://prometheus-prod-srv01.spms.min-saude.pt")
+PROMETHEUS_USER       = os.getenv("PROMETHEUS_USER",       "prometheus")
+PROMETHEUS_PASS       = os.getenv("PROMETHEUS_PASS",       "5FapePt9erAhCNdylnii8s6zr2957pRx1fNGTUUR")
+PROMETHEUS_VERIFY_SSL = os.getenv("PROMETHEUS_VERIFY_SSL", "false").lower() == "true"
 
 # ============================================================================
 # MAPEAMENTO DE SEVERIDADE
 # ============================================================================
 
-# Prometheus severity → Zabbix priority
 SEVERITY_MAP = {
-    "info": 0,        # Not classified
-    "warning": 2,     # Average
-    "critical": 4,    # High
+    "info":     0,
+    "warning":  2,
+    "critical": 4,
 }
 
 # ============================================================================
-# VALIDAÇÃO DE CONFIGURAÇÃO
+# VALIDAÇÃO
 # ============================================================================
 
 def validate_config():
-    """Valida se a configuração está ok"""
     import requests
 
-    logger.info("🔍 Iniciando validação de configuração...")
+    logger.info("Iniciando validacao de configuracao...")
 
     try:
-        # Testar Prometheus
-        logger.info(f"📡 Testando Prometheus: {PROMETHEUS_URL}")
         auth = (PROMETHEUS_USER, PROMETHEUS_PASS) if PROMETHEUS_PASS else None
         resp = requests.get(
-            f"{PROMETHEUS_URL}/-/healthy",
-            auth=auth,
-            verify=PROMETHEUS_VERIFY_SSL,
-            timeout=5
+            "%s/-/healthy" % PROMETHEUS_URL,
+            auth=auth, verify=PROMETHEUS_VERIFY_SSL, timeout=5,
         )
         if resp.status_code == 200:
-            logger.info("✅ Prometheus OK")
-            print(f"✅ Prometheus: {PROMETHEUS_URL}")
+            logger.info("Prometheus OK")
         else:
-            logger.error(f"❌ Prometheus respondeu com {resp.status_code}")
-            print(f"❌ Prometheus respondeu com {resp.status_code}")
+            logger.error("Prometheus respondeu com %s", resp.status_code)
             return False
     except Exception as e:
-        logger.error(f"❌ Prometheus não acessível: {str(e)}")
-        print(f"❌ Prometheus não acessível: {str(e)}")
+        logger.error("Prometheus nao acessivel: %s", e)
         return False
 
     try:
-        # Testar Zabbix
-        logger.info(f"🔐 Testando Zabbix: {ZABBIX_API_URL}")
-        payload = {
-            "jsonrpc": "2.0",
-            "method": "user.login",
-            "params": {"user": ZABBIX_USER, "password": ZABBIX_PASSWORD},
-            "id": 1
-        }
-        resp = requests.post(ZABBIX_API_URL, json=payload, timeout=5)
+        resp = requests.post(ZABBIX_API_URL, timeout=5, verify=ZABBIX_VERIFY_SSL,
+                             json={"jsonrpc": "2.0", "method": "user.login",
+                                   "params": {"user": ZABBIX_USER,
+                                              "password": ZABBIX_PASSWORD},
+                                   "id": 1})
         result = resp.json()
-
         if "result" in result:
-            logger.info("✅ Zabbix OK (login bem-sucedido)")
-            print(f"✅ Zabbix: {ZABBIX_API_URL}")
+            logger.info("Zabbix OK")
         else:
-            logger.error(f"❌ Login Zabbix falhou: {result.get('error')}")
-            print(f"❌ Login Zabbix falhou: {result.get('error')}")
+            logger.error("Login Zabbix falhou: %s", result.get("error"))
             return False
     except Exception as e:
-        logger.error(f"❌ Zabbix não acessível: {str(e)}")
-        print(f"❌ Zabbix não acessível: {str(e)}")
+        logger.error("Zabbix nao acessivel: %s", e)
         return False
 
-    logger.info("✅ VALIDAÇÃO OK - Sistema pronto!")
+    logger.info("VALIDACAO OK - Sistema pronto!")
     return True

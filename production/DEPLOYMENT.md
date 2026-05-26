@@ -1,213 +1,178 @@
-# Deployment — Cópia Manual
+# Deployment — Container Docker
 
-Setup sem git clone. Copiar arquivos manualmente para o servidor de produção.
+Deploy do sincronizador Prometheus → Zabbix via Docker Compose.  
+Não requer Python, venv, nem ficheiro `.env` no ambiente Dev.
 
 ---
 
 ## Pré-requisitos
 
-- Python 3.8 ou superior
-- Acesso de rede ao Zabbix API (porta 4443 ou 443)
+- Docker >= 20.10
+- Docker Compose >= 2.0
+- Acesso de rede ao Zabbix API (porta 4443)
+- Acesso TCP ao Zabbix Trapper (porta 10151)
 - Acesso de rede ao Prometheus (porta 443)
-- Acesso TCP ao Zabbix Trapper (porta 10151 por padrão)
+
+```bash
+docker --version
+docker compose version
+```
 
 ---
 
-## PASSO 1: Copiar Arquivos
+## PASSO 1: Copiar Ficheiros para o Servidor
 
-```bash
-mkdir -p /home/seu-usuario/prometheus-zabbix
-cd /home/seu-usuario/prometheus-zabbix
+Copiar a pasta `production/` para o servidor via scp, rsync ou manualmente.
 
-# Copiar via scp, rsync, wget ou manualmente:
-# config.py, validate.py, sync_prometheus.py, requirements.txt
+Ficheiros necessários:
 ```
-
-Arquivos necessários (mínimo):
-```
+Dockerfile
+docker-compose.yml
+scheduler.py
 config.py
-validate.py
 sync_prometheus.py
+validate.py
 requirements.txt
 ```
 
 ---
 
-## PASSO 2: Editar config.py
+## PASSO 2: Build e Arranque
 
 ```bash
-nano config.py
+cd production
+
+# Build da imagem e arranque em background
+docker compose up -d --build
+
+# Verificar que está a correr
+docker compose ps
+
+# Ver logs em tempo real
+docker compose logs -f
 ```
 
-Alterar os seguintes valores:
-
-```python
-# --- Zabbix ---
-ZABBIX_API_URL  = "https://seu-zabbix:4443/api_jsonrpc.php"
-ZABBIX_USER     = "api"
-ZABBIX_PASSWORD = "sua-senha-zabbix"
-ZABBIX_VERIFY_SSL = False  # True se tiver certificado válido
-
-# --- Prometheus ---
-PROMETHEUS_URL  = "https://seu-prometheus"
-PROMETHEUS_USER = "prometheus"
-PROMETHEUS_PASS = "sua-senha-prometheus"
-PROMETHEUS_VERIFY_SSL = False  # True se tiver certificado válido
-```
-
-Também editar em `sync_prometheus.py` (linhas 30-31):
-
-```python
-ZABBIX_SERVER        = "IP-do-servidor-zabbix"
-ZABBIX_TRAPPER_PORT  = "10151"
-```
+O container arranca imediatamente com as credenciais Dev e executa:
+- `--all` na inicialização e depois a cada **5 minutos**
+- `--push` na inicialização e depois a cada **1 minuto**
 
 ---
 
-## PASSO 3: Setup Python
+## PASSO 3: Validar Conectividade (Opcional)
 
 ```bash
-# Verificar versão (necessário >= 3.8)
-python3 --version
-
-# Criar ambiente virtual
-python3 -m venv venv
-
-# Ativar
-source venv/bin/activate
-
-# Instalar dependências
-pip install -r requirements.txt
-```
-
----
-
-## PASSO 4: Validar Conectividade
-
-```bash
-python3 validate.py
+docker compose exec prometheus-zabbix-sync python validate.py
 ```
 
 Saída esperada:
 ```
-✅ Prometheus OK
-✅ Zabbix OK (login bem-sucedido)
-✅ XX alerting rules encontradas
-✅ X hosts encontrados em Zabbix
-✅ VALIDAÇÃO OK - Sistema pronto para sincronização!
-```
-
-Se falhar: revisar URLs e credenciais em `config.py`.
-
----
-
-## PASSO 5: Primeiro Sync
-
-```bash
-# Cria o host único "prometheus" + items parametrizados + triggers
-python3 sync_prometheus.py --all
-```
-
-Saída esperada:
-```
-======================================================================
-SYNC ALL (NOVO MODELO)
-======================================================================
-Host existente encontrado: prometheus (id=XXX)
-Prometheus alertas activos: N instancias
-Prometheus rules: N regras unicas
-Host: X items, Y triggers existentes
-Build plan: N items unicas
-Build plan: N triggers
-Items criados: N
-Triggers criadas: N
-======================================================================
-SYNC COMPLETO
-  Items: N (novos: +N)
-  Triggers: N (novas: +N)
-======================================================================
+Prometheus OK
+Zabbix OK (login bem-sucedido)
+XX alerting rules encontradas
+X hosts encontrados em Zabbix
+VALIDAÇÃO OK - Sistema pronto para sincronização!
 ```
 
 ---
 
-## PASSO 6: Enviar Valores (Push)
+## Sobrepor Configuração (Outros Ambientes)
+
+Para Prod, Staging ou qualquer ambiente diferente do Dev, exportar as variáveis antes de arrancar:
 
 ```bash
-# Envia valores dos alertas ativos via Zabbix Trapper
-python3 sync_prometheus.py --push
+export ZABBIX_API_URL=https://zabbix-prod.empresa.pt/api_jsonrpc.php
+export ZABBIX_PASSWORD=password_producao
+export PROMETHEUS_URL=https://prometheus-prod.empresa.pt
+export PROMETHEUS_PASS=password_producao
+
+docker compose up -d --build
 ```
 
-Este comando deve ser executado periodicamente (ver Passo 7).
+Ou criar um ficheiro `.env` na pasta `production/`:
+
+```env
+ZABBIX_API_URL=https://zabbix-prod.empresa.pt/api_jsonrpc.php
+ZABBIX_PASSWORD=password_producao
+PROMETHEUS_URL=https://prometheus-prod.empresa.pt
+PROMETHEUS_PASS=password_producao
+```
+
+```bash
+docker compose up -d --build
+```
+
+Ver `.env.example` para todas as variáveis disponíveis.
 
 ---
 
-## PASSO 7: Automação com Cron
+## Verificar Configuração Activa
 
 ```bash
-crontab -e
+docker compose exec prometheus-zabbix-sync python -c "
+import config
+print('Zabbix:', config.ZABBIX_API_URL)
+print('Prometheus:', config.PROMETHEUS_URL)
+"
 ```
-
-Adicionar:
-
-```bash
-# Sincronizar estrutura (host, items, triggers) a cada hora
-0 * * * * cd /home/seu-usuario/prometheus-zabbix && source venv/bin/activate && python3 sync_prometheus.py --all >> /var/log/prometheus-zabbix-sync.log 2>&1
-
-# Enviar valores dos alertas a cada 5 minutos
-*/5 * * * * cd /home/seu-usuario/prometheus-zabbix && source venv/bin/activate && python3 sync_prometheus.py --push >> /var/log/prometheus-zabbix-sync.log 2>&1
-```
-
-> **Nota:** `--all` cria a estrutura (idempotente, seguro repetir). `--push` envia os valores atuais dos alertas.
 
 ---
 
 ## Comandos de Referência
 
 ```bash
-# Ativar venv
-source venv/bin/activate
+# Estado do container
+docker compose ps
 
-# Validar
-python3 validate.py
+# Logs em tempo real
+docker compose logs -f
 
-# Sincronizar estrutura
-python3 sync_prometheus.py --all
+# Últimas 100 linhas
+docker compose logs --tail=100
 
-# Enviar alertas ativos
-python3 sync_prometheus.py --push
+# Parar
+docker compose down
 
-# Modo verbose
-python3 sync_prometheus.py --all --verbose
+# Reiniciar
+docker compose restart
 
-# Ver logs
-tail -f /var/log/prometheus-zabbix-sync.log
+# Rebuild após alterações de código
+docker compose up -d --build
+
+# Sync manual
+docker compose exec prometheus-zabbix-sync python sync_prometheus.py --all
+docker compose exec prometheus-zabbix-sync python sync_prometheus.py --push
+
+# Debug dentro do container
+docker compose exec prometheus-zabbix-sync sh
 ```
 
 ---
 
 ## Troubleshooting
 
-### "Prometheus não acessível"
-- Verificar `PROMETHEUS_URL` em `config.py`
-- Testar: `curl -k -u user:pass https://url/-/healthy`
-
-### "Zabbix não acessível"
-- Verificar `ZABBIX_API_URL` em `config.py`
-- Testar: `curl -k https://seu-zabbix:4443/api_jsonrpc.php`
-
-### "Login Zabbix falhou"
-- Revisar `ZABBIX_USER` e `ZABBIX_PASSWORD` em `config.py`
-
-### "Trapper não consegue enviar"
-- Verificar `ZABBIX_SERVER` e `ZABBIX_TRAPPER_PORT` em `sync_prometheus.py`
-- Testar: `nc -zv IP-zabbix 10151`
-
-### "requests não instalado"
+**Container sai imediatamente**
 ```bash
-source venv/bin/activate
-pip install -r requirements.txt
+docker compose logs
+# Verificar erros de credenciais ou conectividade
 ```
 
-### Sem alertas ativos
-- O Prometheus pode não ter alertas firing neste momento
-- Verificar: `curl -k -u user:pass https://prometheus/-/api/v1/alerts`
+**Triggers não estão a ser criadas**
+```bash
+docker compose exec prometheus-zabbix-sync python sync_prometheus.py --all
+```
+
+**Valores não chegam ao Zabbix**
+```bash
+docker compose exec prometheus-zabbix-sync python sync_prometheus.py --push
+# Verificar linha "Trapper resposta: processed: X"
+```
+
+**Prometheus não acessível**
+```bash
+# Testar a partir de um container temporário
+docker run --rm python:3.11-slim python -c "
+import urllib.request
+urllib.request.urlopen('https://prometheus-url/-/healthy', timeout=5)
+print('OK')
+"
+```
