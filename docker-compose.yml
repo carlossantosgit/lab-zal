@@ -22,6 +22,25 @@ services:
     networks:
       - lab
 
+  zabbix-agent:
+    image: zabbix/zabbix-agent:alpine-5.0-latest
+    user: root
+    environment:
+      ZBX_HOSTNAME: "Zabbix server"
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_SERVER_PORT: "10051"
+      ZBX_PASSIVESERVERS: zabbix-server
+    volumes:
+      - ./zabbix-agent:/etc/zabbix
+      - /proc:/proc:ro
+      - /sys:/sys:ro
+    ports:
+      - "10050:10050"
+    depends_on:
+      - zabbix-server
+    networks:
+      - lab
+
   zabbix-web:
     image: zabbix/zabbix-web-nginx-pgsql:alpine-5.0-latest
     environment:

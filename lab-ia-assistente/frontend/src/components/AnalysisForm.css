@@ -1,0 +1,128 @@
+.analysis-form {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.analysis-form h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #e8f0fe;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  letter-spacing: -0.3px;
+}
+
+/* ─── Form Groups ─── */
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #4a5e7a;
+  margin-bottom: 0.45rem;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  background: #172236;
+  border: 1px solid #2a3f5f;
+  color: #e8f0fe;
+  padding: 0.7rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+
+.form-group input:disabled,
+.form-group select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.form-group select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237b92b4' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 2.2rem;
+  cursor: pointer;
+}
+
+.range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.range-inputs input {
+  flex: 1;
+  max-width: 140px;
+}
+
+.range-inputs span {
+  color: #7b92b4;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* ─── Quick Presets ─── */
+.quick-presets {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.preset-btn {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #2a3f5f;
+  border-radius: 5px;
+  background: transparent;
+  color: #7b92b4;
+  font-size: 0.72rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset-btn:hover {
+  border-color: #3b82f6;
+  color: #60a5fa;
+  background: rgba(59,130,246,0.07);
+}
+
+/* ─── Form Actions ─── */
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-start;
+  margin-top: 1.75rem;
+  flex-wrap: wrap;
+}
+
+.form-actions .button {
+  flex: 1;
+  justify-content: center;
+  min-width: 160px;
+}
+
+@media (max-width: 480px) {
+  .form-actions { flex-direction: column; }
+  .form-actions .button { width: 100%; }
+}

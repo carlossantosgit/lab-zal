@@ -1,0 +1,189 @@
+
+services:
+
+  # ── Zabbix stack ────────────────────────────────────────────────────────────
+  zabbix-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix
+    volumes:
+      - zabbix_db_data:/var/lib/postgresql/data
+    networks:
+      - lab-ia
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zabbix -d zabbix"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:alpine-5.0-latest
+    environment:
+      DB_SERVER_HOST: zabbix-db
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix
+    ports:
+      - "10051:10051"
+    depends_on:
+      zabbix-db:
+        condition: service_healthy
+    networks:
+      - lab-ia
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-5.0-latest
+    environment:
+      DB_SERVER_HOST: zabbix-db
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix
+      ZBX_SERVER_HOST: zabbix-server
+    ports:
+      - "8080:8080"
+    depends_on:
+      - zabbix-server
+    networks:
+      - lab-ia
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent:alpine-5.0-latest
+    user: root
+    environment:
+      ZBX_HOSTNAME: "Zabbix server"
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_SERVER_PORT: "10051"
+      ZBX_PASSIVESERVERS: zabbix-server
+    volumes:
+      - ./configs/zabbix-agent:/etc/zabbix
+      - /proc:/proc:ro
+      - /sys:/sys:ro
+    ports:
+      - "10050:10050"
+    depends_on:
+      - zabbix-server
+    networks:
+      - lab-ia
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.0
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=alexanderzobnin-zabbix-app
+      - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=alexanderzobnin-zabbix-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - lab-ia
+
+  # ── AI Assistant stack ───────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    networks:
+      - lab-ia
+
+  ai-db:
+    image: postgres:16-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: zabbix_admin
+      POSTGRES_PASSWORD: zabbix_password
+      POSTGRES_DB: ia_analyzer
+    volumes:
+      - ai_db_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zabbix_admin -d ia_analyzer"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    networks:
+      - lab-ia
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    networks:
+      - lab-ia
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql://zabbix_admin:zabbix_password@ai-db:5432/ia_analyzer
+      REDIS_URL: redis://redis:6379
+      OLLAMA_URL: http://ollama:11434
+      ZABBIX_URL: http://zabbix-web:8080
+      ZABBIX_USER: Admin
+      ZABBIX_PASSWORD: zabbix
+      GRAFANA_URL: http://grafana:3000
+      GRAFANA_USER: admin
+      GRAFANA_PASSWORD: admin
+      GRAFANA_EXTERNAL_URL: http://localhost:3001
+      LOG_LEVEL: INFO
+    depends_on:
+      ai-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - lab-ia
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:8001
+      REACT_APP_API_BASE: /api/v1
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+    command: npm start
+    networks:
+      - lab-ia
+
+networks:
+  lab-ia:
+    name: lab-ia-network
+
+volumes:
+  zabbix_db_data:
+  grafana_data:
+  ollama_data:
+  ai_db_data:
+  redis_data:
