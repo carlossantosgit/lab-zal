@@ -38,10 +38,12 @@ logger.info("=" * 60)
 # ZABBIX
 # ============================================================================
 
-ZABBIX_API_URL    = os.getenv("ZABBIX_API_URL",    "https://zabbix-dev.spms.min-saude.pt:4443/api_jsonrpc.php")
-ZABBIX_USER       = os.getenv("ZABBIX_USER",       "api")
-ZABBIX_PASSWORD   = os.getenv("ZABBIX_PASSWORD",   "12345678")
-ZABBIX_VERIFY_SSL = os.getenv("ZABBIX_VERIFY_SSL", "false").lower() == "true"
+ZABBIX_API_URL       = os.getenv("ZABBIX_API_URL",       "https://zabbix-dev.spms.min-saude.pt:4443/api_jsonrpc.php")
+ZABBIX_USER          = os.getenv("ZABBIX_USER",          "api")
+ZABBIX_PASSWORD      = os.getenv("ZABBIX_PASSWORD",      "12345678")
+ZABBIX_VERIFY_SSL    = os.getenv("ZABBIX_VERIFY_SSL",    "false").lower() == "true"
+ZABBIX_SERVER        = os.getenv("ZABBIX_SERVER",        "10.43.69.137")
+ZABBIX_TRAPPER_PORT  = os.getenv("ZABBIX_TRAPPER_PORT",  "10151")
 
 # ============================================================================
 # PROMETHEUS

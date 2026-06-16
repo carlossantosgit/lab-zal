@@ -21,14 +21,9 @@ import requests
 from config import (
     logger,
     ZABBIX_API_URL, ZABBIX_USER, ZABBIX_PASSWORD, ZABBIX_VERIFY_SSL,
+    ZABBIX_SERVER, ZABBIX_TRAPPER_PORT,
     PROMETHEUS_URL, PROMETHEUS_USER, PROMETHEUS_PASS, PROMETHEUS_VERIFY_SSL,
 )
-
-# ---------------------------------------------------------------------------
-# Constantes
-# ---------------------------------------------------------------------------
-ZABBIX_SERVER = "10.43.69.137"
-ZABBIX_TRAPPER_PORT = "10151"
 
 PRIORITY_MAP = {
     "info":      1,
